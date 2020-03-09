@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from scipy.spatial import distance
 
 def read_file(file):
     with open(file, 'r') as f:
@@ -16,47 +17,45 @@ def build_restrictions_list(matrix):
     return np.array(list)
 
 
-def infeasibility(xi, ci, matrix):
-    infeas = 0
-    for xj in range(matrix.shape[0]):
-        ml = matrix[xi][xj] == 1 and xj not in ci
-        cl = matrix[xi][xj] == -1 and xj in ci
-        if ml or cl:
-            infeas = infeas + 1
-    return infeas
+def infeasibility(xi, ci, r_list, clusters_index):
+    concerning_xi = r_list[r_list[:,0] == xi]
+    cl = np.count_nonzero((np.isin(concerning_xi[:,1], clusters_index[ci])) & (concerning_xi[:,2] == -1))
+    ml = np.count_nonzero((np.isin(concerning_xi[:,1], np.concatenate(np.delete(clusters_index, ci))) & (concerning_xi[:,2] == 1)))
+    return cl + ml
 
-def greedy(data, matrix, k):
+
+def greedy(data, r_matrix, r_list, k):
     rsi = np.array(range(data.shape[0]))
     # Shuffle the indexes
     random.shuffle(rsi)
     # Calculate initial centroids
     centroids = data[:k]
     # Clusters
-    c = np.empty([3,1])
+    clusters = np.array([[-1], [-1], [-1]])
+    clusters_index = np.array([[-1], [-1], [-1]])
     while True:
+        old_clusters = np.copy(clusters)
+        old_clusters_index = np.copy(clusters_index)
         for i in rsi:
-            infs = [infeasibility(i, ci, matrix) for ci in c]
-            min_inf = np.where(infs == infs.min())
+            infs = [infeasibility(i, ci, r_list, clusters_index) for ci in range(len(clusters_index))]
+            min_inf = np.where(infs == np.min(infs))
             if len(min_inf) == 1:
-                c[min_inf].append(i)
+                best_cluster_index = min_inf
             else:
-                distances = [distance(i, ci, data) for ci in c]
-                min_dist = np.min(distances)
-                c[min_dist].append(i)
-        for ci in range(k):
-            # Update centroid uk with the average instaces of its
-            # associated cluster ci
-            update_dentroids(ci, data)
-        if no_change:
+                distances = [distance.euclidean(data[i], cen) for cen in centroids]
+                min_dist = np.argmin(distances)
+                best_cluster_index = min_dist
+            clusters[best_cluster_index].append(data[i])
+            clusters_index[best_cluster_index].append(i)
+        for i in k:
+            # Update centroid uk with the average instances of its associated cluster ci
+            centroids[i] = np.mean(clusters[i])
+        if np.array_equal(np.sort(old_clusters_index), np.sort(clusters)):
             break
-    return c
+    return clusters
 
 
-iris = read_file('bin/iris_set.dat')
-iris_matrix = read_file('bin/iris_set_const_10.const')
-# print(iris_matrix)
-# print(iris_matrix.shape[0])
-iris_list = build_restrictions_list(iris_matrix)
-# print(iris_list)
-# print(iris_list.shape[0])
-# greedy(iris, iris_matrix)
+data = read_file('bin/iris_set.dat')
+r_matrix = read_file('bin/iris_set_const_10.const')
+r_list = build_restrictions_list(r_matrix)
+k=3
