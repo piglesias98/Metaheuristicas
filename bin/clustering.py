@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from scipy.spatial import distance
+from itertools import combinations
 
 
 def read_file(file):
@@ -64,9 +65,11 @@ def greedy(data, r_matrix, r_list, k):
 
 def initial_solution(n, k):
     clusters = np.random.randint(0, k, n)
-    if
-    return clusters
-
+    # If the solution is feasible
+    if len(np.unique(clusters)) == k:
+        initial_solution(n, k)
+    else:
+        return clusters
 
 
 def c(clusters, data, k):
@@ -74,23 +77,88 @@ def c(clusters, data, k):
     return np.mean(intra_cluster_deviation)
 
 
+def infeasibility_total(k, clusters, r_list):
+    return np.count_nonzero((r_list[i][2] == -1 and r_list[i][1] == clusters[i]) or (r_list[i][2] == 1 and r_list[i][1] != clusters[i]) for i in range(k))
 
 
-def objective_function(data, list_res):
-    return c() + infeasibility_total() * len(data)/len(list_res)
+def objective_function(clusters, data, k, list_res):
+    return c(clusters, data, k) + infeasibility_total(len(data), k) * len(data)/len(list_res)
 
-def local_search(data, r_matrix, r_list, k):
-    n = len(data)
-    clusters = initial_solution()
+def change_neighbour(clusters, i, l):
+    if np.count_nonzero(clusters == l) and clusters[i]!=l:
+        clusters[i]=l
+        return clusters
+    else:
+        change_neighbour(clusters, i, l)
 
-
-
-
-data = read_file('bin/iris_set.dat')
-# r_matrix = read_file('bin/iris_set_const_10.const')
-# print(r_matrix)
-# r_list = build_restrictions_list(r_matrix)
+# def lambda(data, r_list):
 #
-# clusters = greedy(data, r_matrix, r_list, 3)
-# print(clusters)
-print(c(initial_solution(5,3), data, 3))
+
+# def local_search(data, r_matrix, r_list, k):
+#     n = len(data)
+#     sol = initial_solution()
+#     n = len(data)
+#     rsi = np.array(range(data.shape[0]))
+#     clusters = np.array(range(k))
+#     while (iteration < 10000 and !no_change):
+#         old_sol = np.copy(sol)
+#         # hago shuffle y recorro el vecindario
+#         # Shuffle the indexes
+#         random.shuffle(rsi)
+#         random.shuffle(clusters)
+#         while (i< len(rsi) and !better)
+#             while (c<len(clusters) and !better)
+#                 sol = change_neighbour(sol, i, c)
+#                 if (objective_function(sol) > objective_function(old_sol)):
+#                     better = True
+#                     old_sol = np.copy(sol)
+#                 iteration += 1
+#                 c += 1
+#             iteration += 1
+#             i += 1
+#         if (better):
+#             no_changes = True
+#     return sol
+#
+#
+#
+# def local_search(data, k):
+#     n = len(data)
+#     sol = initial_solution(n, k)
+#     iteration = 0
+#     while True:
+#         neighbourhood = generate_virtual_neighbourhood(n, k)
+#         i = -1
+#         while True:
+#             i += 1
+#             iteration += 1
+#             possible_neighbour = generate_neighbour(sol, neighbourhood[i])
+#             if len(np.unique(possible_neighbour)) == k:
+#                 neighbour = possible_neighbour
+#                 if objective(neighbour) > objective(sol) or neighbourhood:
+#                     break
+#         if objective(neighbour) > objective(sol):
+#             sol = neighbour
+#         iteration += 1
+#         else objective(neighbour) <= objective (sol) or iterations:
+#             break
+
+
+def generate_neighbour(sol, to_change):
+    neighbour = np.copy(sol)
+    neighbour[to_change[0]]=to_change[1]
+    return neighbour
+
+def generate_virtual_neighbourhood(n, k):
+    neighbourhood = []
+    for c in range(k):
+        for i in range(n):
+            neighbourhood.append([i, c])
+    random.shuffle(neighbourhood)
+    return np.array(neighbourhood)
+
+
+mi = [1,2,3,4]
+comb = combinations(mi, 2)
+for i in comb:
+    print(i)
