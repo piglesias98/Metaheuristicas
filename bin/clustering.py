@@ -21,11 +21,8 @@ def build_restrictions_list(matrix):
     return np.array(list)
 
 
-def infeasibility(xi, ci, r_matrix, clusters):
-    infeas = 0
-    for i in range(r_matrix.shape[0]):
-        if (ci == clusters[i] and r_matrix[xi][i] == -1) or (ci != clusters[i] and r_matrix[xi][i] == 1):
-            infeas = infeas + 1
+def infeasibility(xi, ci, r_matrix, sol):
+    infeas = np.count_nonzero([(ci == sol[i] and r_matrix[xi][i] == -1) or (ci != sol[i] and r_matrix[xi][i] == 1) for i in range(r_matrix.shape[0])])
     return infeas
 
 
@@ -48,11 +45,12 @@ def generate_neighbour(sol, to_change):
     return neighbour
 
 
-def generate_virtual_neighbourhood(n, k):
+def generate_virtual_neighbourhood(n, k, sol):
     neighbourhood = []
     for c in range(k):
         for i in range(n):
-            neighbourhood.append([i, c])
+            if len(np.unique(generate_neighbour((sol),[i,c]))) == k:
+                neighbourhood.append([i, c])
     random.shuffle(neighbourhood)
     return np.array(neighbourhood)
 
@@ -89,20 +87,26 @@ def change_neighbour(clusters, i, l):
         change_neighbour(clusters, i, l)
 
 
-def greedy(data, r_matrix, r_list, k):
+def initial_centroids(data, k):
+    max = [np.max([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
+    min = [np.min([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
+    return [[random.uniform(max[i], min[i]) for i in range(data.shape[1])] for j in range(k)]
+
+
+def greedy(data, r_matrix, k):
     # Number of items to cluster
     n = len(data)
     rsi = np.array(range(data.shape[0]))
     # Shuffle the indexes
     random.shuffle(rsi)
-    # Calculate initial centroids
+    # Compute initial centroids
     centroids = data[:k]
     # Clusters
-    clusters = np.full(n, -1)
+    sol = np.full(n, -1)
     while True:
-        old_clusters = np.copy(clusters)
+        old_clusters = np.copy(sol)
         for i in rsi:
-            infeas = [infeasibility(i, ci, r_matrix, clusters) for ci in range(k)]
+            infeas = [infeasibility(i, ci, r_matrix, sol) for ci in range(k)]
             min_inf = np.where(infeas == np.min(infeas))[0]
             if len(min_inf) == 1:
                 best_cluster = min_inf[0]
@@ -111,12 +115,12 @@ def greedy(data, r_matrix, r_list, k):
                 print(distances)
                 best_cluster = np.argmin(np.array(distances))
             # Assign the element to the best cluster
-            clusters[i] = best_cluster
+            sol[i] = best_cluster
         # Update centroid uk with the average instances of its associated cluster ci
-        centroids = compute_centroids(data, clusters, k)
-        if np.array_equal(old_clusters, clusters):
+        centroids = compute_centroids(data, sol, k)
+        if np.array_equal(old_clusters, sol):
             break
-    return clusters
+    return sol
 
 
 def local_search(data, k, r_matrix, r_list):
@@ -124,22 +128,21 @@ def local_search(data, k, r_matrix, r_list):
     sol = initial_solution(n, k)
     iteration = 0
     while True:
-        neighbourhood = generate_virtual_neighbourhood(n, k)
-        i = -1
+        # generate virtual neighbourhood of possible and FEASIBLE neighbours
+        neighbourhood = generate_virtual_neighbourhood(n, k, sol)
+        i = 0
         while True:
-            i += 1
             iteration += 1
-            possible_neighbour = generate_neighbour(sol, neighbourhood[i])
-            if len(np.unique(possible_neighbour)) == k:
-                neighbour = possible_neighbour
-                objective_neighbour = objective(neighbour, data, k, r_list)
-                objective_sol = objective(sol, data, k, r_list)
-                if objective_neighbour > objective_sol or i >= len(neighbourhood):
-                    break
+            neighbour = generate_neighbour(sol, neighbourhood[i])
+            i += 1
+            objective_neighbour = objective(neighbour, data, k, r_list)
+            objective_sol = objective(sol, data, k, r_list)
+            if objective_neighbour > objective_sol or i >= len(neighbourhood):
+                break
         if objective_neighbour > objective_sol:
             sol = neighbour
         iteration += 1
-        if objective_neighbour <= objective_sol or iteration>=10000:
+        if objective_neighbour <= objective_sol or iteration>=100000:
             break
     return sol
 
@@ -148,8 +151,11 @@ data = read_file("bin/iris_set.dat")
 r_matrix = read_file("bin/iris_set_const_10.const")
 r_list = build_restrictions_list(r_matrix)
 
-start_time = time.time()
-mi_sol = local_search(data, 3, r_matrix, r_list)
-elapsed_time = time.time() - start_time
-print(mi_sol)
-print(elapsed_time)
+# start_time = time.time()
+# # mi_sol = local_search(data, 3, r_matrix, r_list)
+# mi_sol = greedy(data, r_matrix, r_list, 3)
+# elapsed_time = time.time() - start_time
+# print(mi_sol)
+# print(elapsed_time)
+# objetivo = objective(mi_sol, data, 3, r_list)
+# print(objetivo)
