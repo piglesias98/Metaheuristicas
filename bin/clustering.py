@@ -2,6 +2,7 @@ import numpy as np
 import random
 from scipy.spatial import distance
 from itertools import combinations
+import time
 
 
 def read_file(file):
@@ -33,12 +34,12 @@ def compute_centroids(data, sol, k):
 
 
 def initial_solution(n, k):
-    clusters = np.random.randint(0, k, n)
-    # If the solution is feasible
-    if len(np.unique(clusters)) == k:
+    initial_sol = np.random.randint(0, k, n)
+    # If the solution is not feasible try again
+    if len(np.unique(initial_sol)) != k:
         initial_solution(n, k)
     else:
-        return clusters
+        return initial_sol
 
 
 def generate_neighbour(sol, to_change):
@@ -133,12 +134,12 @@ def local_search(data, k, r_matrix, r_list):
                 neighbour = possible_neighbour
                 objective_neighbour = objective(neighbour, data, k, r_list)
                 objective_sol = objective(sol, data, k, r_list)
-                if objective_neighbour > objective_sol or neighbourhood:
+                if objective_neighbour > objective_sol or i >= len(neighbourhood):
                     break
         if objective_neighbour > objective_sol:
             sol = neighbour
         iteration += 1
-        if objective_neighbour <= objective_sol or iteration>10000:
+        if objective_neighbour <= objective_sol or iteration>=10000:
             break
     return sol
 
@@ -147,5 +148,8 @@ data = read_file("bin/iris_set.dat")
 r_matrix = read_file("bin/iris_set_const_10.const")
 r_list = build_restrictions_list(r_matrix)
 
-
-# mi_sol = local_search(data, 3, r_matrix, r_list)
+start_time = time.time()
+mi_sol = local_search(data, 3, r_matrix, r_list)
+elapsed_time = time.time() - start_time
+print(mi_sol)
+print(elapsed_time)
