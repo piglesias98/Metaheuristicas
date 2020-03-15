@@ -32,6 +32,61 @@ def compute_centroids(data, sol, k):
     return [np.mean(data[np.where(sol == i)]) for i in range(k)]
 
 
+def initial_solution(n, k):
+    clusters = np.random.randint(0, k, n)
+    # If the solution is feasible
+    if len(np.unique(clusters)) == k:
+        initial_solution(n, k)
+    else:
+        return clusters
+
+
+def generate_neighbour(sol, to_change):
+    neighbour = np.copy(sol)
+    neighbour[to_change[0]]=to_change[1]
+    return neighbour
+
+
+def generate_virtual_neighbourhood(n, k):
+    neighbourhood = []
+    for c in range(k):
+        for i in range(n):
+            neighbourhood.append([i, c])
+    random.shuffle(neighbourhood)
+    return np.array(neighbourhood)
+
+
+def infeasibility_total(k, sol, r_list):
+    return np.count_nonzero((r_list[i][2] == -1 and r_list[i][1] == sol[i]) or (r_list[i][2] == 1 and r_list[i][1] != sol[i]) for i in range(k))
+
+
+def compute_lambda(data, r_list):
+    index_list = np.array(range(data.shape[0]))
+    comb = np.array(list(combinations(index_list, 2)))
+    d = np.max([distance.euclidean(data[i[0]], data[i[1]]) for i in comb])
+    r = len(r_list)
+    return d/r
+
+
+def c(sol, data, centroids, k):
+    data_cluster = np.array([data[np.where(sol == c)] for c in range(k)])
+    dis_cluster = [[distance.euclidean(data_cluster[c][i], centroids[c]) for i in range(data_cluster[c].shape[0])] for c in range(k)]
+    intra_cluster_mean_distance = [np.mean(dis_cluster[c]) for c in range(k)]
+    general_deviation = np.mean(intra_cluster_mean_distance)
+    return general_deviation
+
+
+def objective(sol, data, k, r_list):
+    return c(sol, data, compute_centroids(data, sol, k), k) + infeasibility_total(k, sol, r_list) * compute_lambda(data, r_list)
+
+
+def change_neighbour(clusters, i, l):
+    if np.count_nonzero(clusters == l) and clusters[i]!=l:
+        clusters[i]=l
+        return clusters
+    else:
+        change_neighbour(clusters, i, l)
+
 
 def greedy(data, r_matrix, r_list, k):
     # Number of items to cluster
@@ -63,107 +118,29 @@ def greedy(data, r_matrix, r_list, k):
     return clusters
 
 
-def initial_solution(n, k):
-    clusters = np.random.randint(0, k, n)
-    # If the solution is feasible
-    if len(np.unique(clusters)) == k:
-        initial_solution(n, k)
-    else:
-        return clusters
-
-
-
-
-# def lambda(data, r_list):
-#
-
-# def local_search(data, r_matrix, r_list, k):
-#     n = len(data)
-#     sol = initial_solution()
-#     n = len(data)
-#     rsi = np.array(range(data.shape[0]))
-#     clusters = np.array(range(k))
-#     while (iteration < 10000 and !no_change):
-#         old_sol = np.copy(sol)
-#         # hago shuffle y recorro el vecindario
-#         # Shuffle the indexes
-#         random.shuffle(rsi)
-#         random.shuffle(clusters)
-#         while (i< len(rsi) and !better)
-#             while (c<len(clusters) and !better)
-#                 sol = change_neighbour(sol, i, c)
-#                 if (objective_function(sol) > objective_function(old_sol)):
-#                     better = True
-#                     old_sol = np.copy(sol)
-#                 iteration += 1
-#                 c += 1
-#             iteration += 1
-#             i += 1
-#         if (better):
-#             no_changes = True
-#     return sol
-#
-#
-#
-# def local_search(data, k):
-#     n = len(data)
-#     sol = initial_solution(n, k)
-#     iteration = 0
-#     while True:
-#         neighbourhood = generate_virtual_neighbourhood(n, k)
-#         i = -1
-#         while True:
-#             i += 1
-#             iteration += 1
-#             possible_neighbour = generate_neighbour(sol, neighbourhood[i])
-#             if len(np.unique(possible_neighbour)) == k:
-#                 neighbour = possible_neighbour
-#                 if objective(neighbour) > objective(sol) or neighbourhood:
-#                     break
-#         if objective(neighbour) > objective(sol):
-#             sol = neighbour
-#         iteration += 1
-#         else objective(neighbour) <= objective (sol) or iterations:
-#             break
-
-
-def generate_neighbour(sol, to_change):
-    neighbour = np.copy(sol)
-    neighbour[to_change[0]]=to_change[1]
-    return neighbour
-
-def generate_virtual_neighbourhood(n, k):
-    neighbourhood = []
-    for c in range(k):
-        for i in range(n):
-            neighbourhood.append([i, c])
-    random.shuffle(neighbourhood)
-    return np.array(neighbourhood)
-
-
-
-def infeasibility_total(k, sol, r_list):
-    return np.count_nonzero((r_list[i][2] == -1 and r_list[i][1] == sol[i]) or (r_list[i][2] == 1 and r_list[i][1] != sol[i]) for i in range(k))
-
-
-def objective(sol, data, k, r_list):
-    return c(sol, data, k) + infeasibility_total(k, sol, r_list) * compute_lambda(data, r_list)
-
-def change_neighbour(clusters, i, l):
-    if np.count_nonzero(clusters == l) and clusters[i]!=l:
-        clusters[i]=l
-        return clusters
-    else:
-        change_neighbour(clusters, i, l)
-
-
-def compute_lambda(data, r_list):
-    index_list = np.array(range(data.shape[0]))
-    comb = np.array(list(combinations(index_list, 2)))
-    d = np.max([distance.euclidean(data[i[0]], data[i[1]]) for i in comb])
-    r = len(r_list)
-    return d/r
-
+def local_search(data, k, r_matrix, r_list):
+    n = len(data)
+    sol = initial_solution(n, k)
+    iteration = 0
+    while True:
+        neighbourhood = generate_virtual_neighbourhood(n, k)
+        i = -1
+        while True:
+            i += 1
+            iteration += 1
+            possible_neighbour = generate_neighbour(sol, neighbourhood[i])
+            if len(np.unique(possible_neighbour)) == k:
+                neighbour = possible_neighbour
+                objective_neighbour = objective(neighbour, data, k, r_list)
+                objective_sol = objective(sol, data, k, r_list)
+                if objective_neighbour > objective_sol or neighbourhood:
+                    break
+        if objective_neighbour > objective_sol:
+            sol = neighbour
+        iteration += 1
+        if objective_neighbour <= objective_sol or iteration>10000:
+            break
+    return sol
 
 
 data = read_file("bin/iris_set.dat")
@@ -171,10 +148,4 @@ r_matrix = read_file("bin/iris_set_const_10.const")
 r_list = build_restrictions_list(r_matrix)
 
 
-
-def c(sol, data, centroids, k):
-    data_cluster = np.array([data[np.where(sol == c)] for c in range(k)])
-    dis_cluster = [[distance.euclidean(data_cluster[c][i], centroids[c]) for i in range(data_cluster[c].shape[0])] for c in range(k)]
-    intra_cluster_mean_distance = [np.mean(dis_cluster[c]) for c in range(k)]
-    general_deviation = np.mean(intra_cluster_mean_distance)
-    return general_deviation
+# mi_sol = local_search(data, 3, r_matrix, r_list)
