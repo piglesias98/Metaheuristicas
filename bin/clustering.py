@@ -100,25 +100,24 @@ def greedy(data, r_matrix, k):
     # Shuffle the indexes
     random.shuffle(rsi)
     # Compute initial centroids
-    centroids = data[:k]
+    centroids = initial_centroids(data, k)
     # Clusters
     sol = np.full(n, -1)
     while True:
-        old_clusters = np.copy(sol)
+        old_sol = np.copy(sol)
         for i in rsi:
             infeas = [infeasibility(i, ci, r_matrix, sol) for ci in range(k)]
             min_inf = np.where(infeas == np.min(infeas))[0]
             if len(min_inf) == 1:
                 best_cluster = min_inf[0]
             else:
-                distances = [distance.euclidean(data[i], centroids[c]) for c in min_inf]
-                print(distances)
-                best_cluster = np.argmin(np.array(distances))
+                distances = np.array([[distance.euclidean(data[i], centroids[c]), c] for c in min_inf])
+                best_cluster = distances[np.argmin(distances[:, 0]), 1]
             # Assign the element to the best cluster
             sol[i] = best_cluster
         # Update centroid uk with the average instances of its associated cluster ci
         centroids = compute_centroids(data, sol, k)
-        if np.array_equal(old_clusters, sol):
+        if np.array_equal(old_sol, sol):
             break
     return sol
 
@@ -151,11 +150,11 @@ data = read_file("bin/iris_set.dat")
 r_matrix = read_file("bin/iris_set_const_10.const")
 r_list = build_restrictions_list(r_matrix)
 
-# start_time = time.time()
-# # mi_sol = local_search(data, 3, r_matrix, r_list)
-# mi_sol = greedy(data, r_matrix, r_list, 3)
-# elapsed_time = time.time() - start_time
-# print(mi_sol)
-# print(elapsed_time)
-# objetivo = objective(mi_sol, data, 3, r_list)
-# print(objetivo)
+start_time = time.time()
+# mi_sol = local_search(data, 3, r_matrix, r_list)
+mi_sol = greedy(data, r_matrix, 3)
+elapsed_time = time.time() - start_time
+print(mi_sol)
+print(elapsed_time)
+objetivo = objective(mi_sol, data, 3, r_list)
+print(objetivo)
