@@ -28,8 +28,8 @@ def infeasibility(xi, ci, r_matrix, clusters):
     return infeas
 
 
-def compute_centroids(data, clusters, k):
-    return [np.mean(data[np.where(clusters == i)]) for i in range(k)]
+def compute_centroids(data, sol, k):
+    return [np.mean(data[np.where(sol == i)]) for i in range(k)]
 
 
 
@@ -72,24 +72,7 @@ def initial_solution(n, k):
         return clusters
 
 
-def c(clusters, data, k):
-    intra_cluster_deviation = [np.std(data[np.where(clusters == i)]) for i in range(k)]
-    return np.mean(intra_cluster_deviation)
 
-
-def infeasibility_total(k, clusters, r_list):
-    return np.count_nonzero((r_list[i][2] == -1 and r_list[i][1] == clusters[i]) or (r_list[i][2] == 1 and r_list[i][1] != clusters[i]) for i in range(k))
-
-
-def objective_function(clusters, data, k, list_res):
-    return c(clusters, data, k) + infeasibility_total(len(data), k) * len(data)/len(list_res)
-
-def change_neighbour(clusters, i, l):
-    if np.count_nonzero(clusters == l) and clusters[i]!=l:
-        clusters[i]=l
-        return clusters
-    else:
-        change_neighbour(clusters, i, l)
 
 # def lambda(data, r_list):
 #
@@ -158,7 +141,40 @@ def generate_virtual_neighbourhood(n, k):
     return np.array(neighbourhood)
 
 
-mi = [1,2,3,4]
-comb = combinations(mi, 2)
-for i in comb:
-    print(i)
+
+def infeasibility_total(k, sol, r_list):
+    return np.count_nonzero((r_list[i][2] == -1 and r_list[i][1] == sol[i]) or (r_list[i][2] == 1 and r_list[i][1] != sol[i]) for i in range(k))
+
+
+def objective(sol, data, k, r_list):
+    return c(sol, data, k) + infeasibility_total(k, sol, r_list) * compute_lambda(data, r_list)
+
+def change_neighbour(clusters, i, l):
+    if np.count_nonzero(clusters == l) and clusters[i]!=l:
+        clusters[i]=l
+        return clusters
+    else:
+        change_neighbour(clusters, i, l)
+
+
+def compute_lambda(data, r_list):
+    index_list = np.array(range(data.shape[0]))
+    comb = np.array(list(combinations(index_list, 2)))
+    d = np.max([distance.euclidean(data[i[0]], data[i[1]]) for i in comb])
+    r = len(r_list)
+    return d/r
+
+
+
+data = read_file("bin/iris_set.dat")
+r_matrix = read_file("bin/iris_set_const_10.const")
+r_list = build_restrictions_list(r_matrix)
+
+
+
+def c(sol, data, centroids, k):
+    data_cluster = np.array([data[np.where(sol == c)] for c in range(k)])
+    dis_cluster = [[distance.euclidean(data_cluster[c][i], centroids[c]) for i in range(data_cluster[c].shape[0])] for c in range(k)]
+    intra_cluster_mean_distance = [np.mean(dis_cluster[c]) for c in range(k)]
+    general_deviation = np.mean(intra_cluster_mean_distance)
+    return general_deviation
