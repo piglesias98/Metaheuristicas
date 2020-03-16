@@ -3,8 +3,9 @@ import random
 from scipy.spatial import distance
 from itertools import combinations
 import time
+import copy
+from bin import p1
 
-random.seed(30)
 
 def read_file(file):
     with open(file, 'r') as f:
@@ -46,18 +47,32 @@ def generate_neighbour(sol, to_change):
     return neighbour
 
 
-def generate_virtual_neighbourhood(n, k, sol):
+# def generate_virtual_neighbourhood(n, k, sol):
+#     neighbourhood = []
+#     for c in range(k):
+#         for i in range(n):
+#             if len(np.unique(generate_neighbour((sol),[i,c]))) == k:
+#                 neighbourhood.append([i, c])
+#     random.shuffle(neighbourhood)
+#     return np.array(neighbourhood)
+
+def generate_virtual_neighbourhood (n, k, sol):
     neighbourhood = []
-    for c in range(k):
-        for i in range(n):
-            if len(np.unique(generate_neighbour((sol),[i,c]))) == k:
-                neighbourhood.append([i, c])
+    for i in range(n):
+        for c in range(k):
+            if sol[i] != c:
+                neighbourhood.append([i,c])
     random.shuffle(neighbourhood)
     return np.array(neighbourhood)
 
+# def generate_virtual_neighbourhood(sol,k,n):
+#     neighbourhood=[(i,j) for i in range(n) for j in np.delete(np.array(range(k)),sol[i])]
+#     random.shuffle(neighbourhood)
+#     return np.array(neighbourhood)
+
 
 def infeasibility_total(sol, r_list):
-    return np.count_nonzero((i[2] == -1 and sol[i[0]] == sol[i[1]]) or (i[2] == 1 and sol[i[0]] != sol[i[1]]) for i in r_list)
+    return np.count_nonzero([ (int(i[2]) == -1 and sol[int(i[0])] == sol[int(i[1])]) or (int(i[2]) == 1 and sol[int(i[0])] != sol[int(i[1])]) for i in r_list])
 
 
 def compute_lambda(data, r_list):
@@ -68,7 +83,8 @@ def compute_lambda(data, r_list):
     return d/r
 
 
-def c(sol, data, centroids, k):
+def c(sol, data, k):
+    centroids = compute_centroids(data, sol, k)
     data_cluster = np.array([data[np.where(sol == c)] for c in range(k)])
     dis_cluster = [[distance.euclidean(data_cluster[c][i], centroids[c]) for i in range(data_cluster[c].shape[0])] for c in range(k)]
     intra_cluster_mean_distance = [np.mean(dis_cluster[c]) for c in range(k)]
@@ -77,7 +93,8 @@ def c(sol, data, centroids, k):
 
 
 def objective(sol, data, k, r_list, l):
-    return c(sol, data, compute_centroids(data, sol, k), k) + infeasibility_total(sol, r_list) * l
+    obj = c(sol, data, k) + infeasibility_total(sol, r_list) * l
+    return obj
 
 
 def change_neighbour(clusters, i, l):
@@ -136,28 +153,33 @@ def local_search(data, r_list, k):
     while iteration<100000 and i<len(neighbourhood):
         neighbour = generate_neighbour(sol, neighbourhood[i])
         i += 1
-        objective_neighbour = objective(neighbour, data, k, r_list, l)
-        iteration += 1
-        # first neighbour that improves actual solution
-        if objective_neighbour < objective_sol:
-            sol = np.copy(neighbour)
-            objective_sol = objective_neighbour
-            neighbourhood = generate_virtual_neighbourhood(n, k, sol)
-            i = 0
+        # If it is a feasible neighbour
+        if len(np.unique(neighbour)) == k:
+            objective_neighbour = objective(neighbour, data, k, r_list, l)
+            iteration += 1
+            # first neighbour that improves actual solution
+            if objective_neighbour < objective_sol:
+                sol = copy.deepcopy(neighbour)
+                objective_sol = copy.deepcopy(objective_neighbour)
+                neighbourhood = generate_virtual_neighbourhood(n, k, sol)
+                i = 0
     return sol
 
 
-data = read_file("bin/ecoli_set.dat")
-r_matrix = read_file("bin/ecoli_set_const_20.const")
-r_list = build_restrictions_list(r_matrix)
-k = 8
-start_time = time.time()
-mi_sol = local_search(data, r_list, k)
-# mi_sol = greedy(data, r_matrix, 3)
-elapsed_time = time.time() - start_time
-print(mi_sol)
-print("tiempo", elapsed_time)
-objetivo = objective(mi_sol, data, k, r_list, compute_lambda(data, r_list))
-print("objetivo", objetivo)
-c_rate = c(mi_sol, data, compute_centroids(data, mi_sol, k))
-print("c_rate", c_rate)
+# data = read_file("bin/iris_set.dat")
+# r_matrix = read_file("bin/iris_set_const_20.const")
+# r_list = build_restrictions_list(r_matrix)
+# k = 3
+# start_time = time.time()
+# mi_sol = local_search(data, r_list, k)
+# # mi_sol = greedy(data, r_matrix, 3)
+# elapsed_time = time.time() - start_time
+# print(mi_sol)
+# print("tiempo", elapsed_time)
+# l = compute_lambda(data, r_list)
+# objetivo = objective(mi_sol, data, k, r_list, l)
+# print("agregado", objetivo)
+# c_rate = c(mi_sol, data, k)
+# print("c_rate", c_rate)
+# infeas = infeasibility_total(mi_sol,r_list)
+# print("inf_rate", infeas)
