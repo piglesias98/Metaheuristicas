@@ -2,9 +2,11 @@ import numpy as np
 import random
 from scipy.spatial import distance
 from itertools import combinations
-import time
 import copy
-from bin import p1
+
+'''
+Read data file and convert it to np array
+'''
 
 
 def read_file(file):
@@ -12,6 +14,11 @@ def read_file(file):
         line = [i.strip().split(',') for i in f]
         data = [[float(i) for i in l] for l in line]
         return np.array(data)
+
+
+'''
+Build a np array from the restriction matrix
+'''
 
 
 def build_restrictions_list(matrix):
@@ -23,16 +30,32 @@ def build_restrictions_list(matrix):
     return np.array(list)
 
 
+'''
+Compute infeasibility of one adding one element to a cluster
+'''
+
+
 def infeasibility(xi, ci, r_matrix, sol):
     infeas = np.count_nonzero([(ci == sol[i] and r_matrix[xi][i] == -1) or (ci != sol[i] and r_matrix[xi][i] == 1) for i in range(r_matrix.shape[0])])
     return infeas
+
+
+'''
+Compute centroids from a solution and number of clusters
+'''
 
 
 def compute_centroids(data, sol, k):
     return [np.mean(data[np.where(sol == i)]) for i in range(k)]
 
 
-def initial_solution(k, n):
+'''
+Computes random initial solution of n lenght with k clusters
+'''
+
+
+def initial_solution(k, n, seed):
+    np.random.seed(seed)
     initial_sol = np.random.randint(0, k, n)
     # If the solution is not feasible try again
     if len(np.unique(initial_sol)) != k:
@@ -41,20 +64,21 @@ def initial_solution(k, n):
         return initial_sol
 
 
+'''
+Generate neighbour from sol changing values from to_change
+'''
+
+
 def generate_neighbour(sol, to_change):
     neighbour = np.copy(sol)
     neighbour[to_change[0]]=to_change[1]
     return neighbour
 
 
-# def generate_virtual_neighbourhood(n, k, sol):
-#     neighbourhood = []
-#     for c in range(k):
-#         for i in range(n):
-#             if len(np.unique(generate_neighbour((sol),[i,c]))) == k:
-#                 neighbourhood.append([i, c])
-#     random.shuffle(neighbourhood)
-#     return np.array(neighbourhood)
+'''
+Generate all possible changes from a solution sol
+'''
+
 
 def generate_virtual_neighbourhood (n, k, sol):
     neighbourhood = []
@@ -65,14 +89,19 @@ def generate_virtual_neighbourhood (n, k, sol):
     random.shuffle(neighbourhood)
     return np.array(neighbourhood)
 
-# def generate_virtual_neighbourhood(sol,k,n):
-#     neighbourhood=[(i,j) for i in range(n) for j in np.delete(np.array(range(k)),sol[i])]
-#     random.shuffle(neighbourhood)
-#     return np.array(neighbourhood)
+
+'''
+Computes global infeasibility for a solution
+'''
 
 
 def infeasibility_total(sol, r_list):
     return np.count_nonzero([ (int(i[2]) == -1 and sol[int(i[0])] == sol[int(i[1])]) or (int(i[2]) == 1 and sol[int(i[0])] != sol[int(i[1])]) for i in r_list])
+
+
+'''
+Compute lambda
+'''
 
 
 def compute_lambda(data, r_list):
@@ -81,6 +110,11 @@ def compute_lambda(data, r_list):
     d = np.max([distance.euclidean(data[i[0]], data[i[1]]) for i in comb])
     r = len(r_list)
     return d/r
+
+
+'''
+Compute c
+'''
 
 
 def c(sol, data, k):
@@ -92,33 +126,33 @@ def c(sol, data, k):
     return general_deviation
 
 
+'''
+Compute objective function
+'''
+
+
 def objective(sol, data, k, r_list, l):
     obj = c(sol, data, k) + infeasibility_total(sol, r_list) * l
     return obj
 
 
-def change_neighbour(clusters, i, l):
-    if np.count_nonzero(clusters == l) and clusters[i]!=l:
-        clusters[i]=l
-        return clusters
-    else:
-        change_neighbour(clusters, i, l)
 
-
-def initial_centroids(data, k):
+def initial_centroids(data, k, seed):
+    random.seed(seed)
     max = [np.max([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
     min = [np.min([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
     return [[random.uniform(max[i], min[i]) for i in range(data.shape[1])] for j in range(k)]
 
 
-def greedy(data, r_matrix, k):
+def greedy(data, r_matrix, k, seed):
     # Number of items to cluster
     n = len(data)
     rsi = np.array(range(data.shape[0]))
     # Shuffle the indexes
+    random.seed(seed)
     random.shuffle(rsi)
     # Compute initial centroids
-    centroids = initial_centroids(data, k)
+    centroids = initial_centroids(data, k, seed)
     # Clusters
     sol = np.full(n, -1)
     while True:
@@ -135,17 +169,15 @@ def greedy(data, r_matrix, k):
             sol[i] = int(best_cluster)
         # Update centroid uk with the average instances of its associated cluster ci
         centroids = compute_centroids(data, sol, k)
-        print("old",old_sol)
-        print("new", sol)
         if np.array_equal(old_sol, sol):
             break
     return sol
 
 
-def local_search(data, r_list, k):
+def local_search(data, r_list, k, seed):
     n = len(data)
     l = compute_lambda(data, r_list)
-    sol = initial_solution(k, n)
+    sol = initial_solution(k, n, seed)
     iteration = 0
     i = 0
     neighbourhood = generate_virtual_neighbourhood(n, k, sol)
@@ -166,20 +198,5 @@ def local_search(data, r_list, k):
     return sol
 
 
-# data = read_file("bin/iris_set.dat")
-# r_matrix = read_file("bin/iris_set_const_20.const")
-# r_list = build_restrictions_list(r_matrix)
-# k = 3
-# start_time = time.time()
-# mi_sol = local_search(data, r_list, k)
-# # mi_sol = greedy(data, r_matrix, 3)
-# elapsed_time = time.time() - start_time
-# print(mi_sol)
-# print("tiempo", elapsed_time)
-# l = compute_lambda(data, r_list)
-# objetivo = objective(mi_sol, data, k, r_list, l)
-# print("agregado", objetivo)
-# c_rate = c(mi_sol, data, k)
-# print("c_rate", c_rate)
-# infeas = infeasibility_total(mi_sol,r_list)
-# print("inf_rate", infeas)
+
+
