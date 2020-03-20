@@ -5,19 +5,22 @@ executions = 5
 datasets = ["iris", "ecoli", "rand"]
 clusters = [3, 8, 3]
 restrictions = ["10", "20"]
-seeds = [94, 33, 42, 22, 110]
+seeds = [94, 33, 56, 22, 110]
 # Results file
-f = open("bin/greedy_v4.txt", "w")
+f = open("bin/local_search_v3.txt", "w")
 
 for d in range(len(datasets)):
     data = clustering.read_file("bin/"+datasets[d]+"_set.dat")
     f.write("\n\n------------------------------------  "+datasets[d]+"  ------------------------------------\n")
+    print(datasets[d])
     for r in restrictions:
         r_matrix = clustering.read_file("bin/"+datasets[d]+"_set_const_"+r+".const")
         r_list = clustering.build_restrictions_list(r_matrix)
         f.write("\n\n--------> Restriction: " + r + "\n")
+        print("Restriction: ", r)
         for i in range(executions):
             f.write("--EXECUTION: " + str(i) + "\n")
+            print("Execution: ", i)
             start_time = time.time()
             sol = clustering.local_search(data, r_list, clusters[d], seeds[i])
             # sol = clustering.greedy(data, r_matrix, clusters[d], seeds[i])

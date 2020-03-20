@@ -26,7 +26,7 @@ def build_restrictions_list(matrix):
     for i in range(matrix.shape[0]):
         for j in range(i+1, matrix.shape[1]):
             if matrix[i][j] != 0:
-                list.append([i, j, matrix[i][j]])
+                list.append([i, j, int(matrix[i][j])])
     return np.array(list)
 
 
@@ -81,13 +81,8 @@ Generate all possible changes from a solution sol
 
 
 def generate_virtual_neighbourhood (n, k, sol):
-    neighbourhood = []
-    for i in range(n):
-        for c in range(k):
-            if sol[i] != c:
-                neighbourhood.append([i,c])
-    random.shuffle(neighbourhood)
-    return np.array(neighbourhood)
+    neighbourhood = [[i, c] for c in range(k) for i in range(n) if sol[i] != c]
+    return np.array(random.shuffle(neighbourhood))
 
 
 '''
@@ -96,7 +91,7 @@ Computes global infeasibility for a solution
 
 
 def infeasibility_total(sol, r_list):
-    return np.count_nonzero([ (int(i[2]) == -1 and sol[int(i[0])] == sol[int(i[1])]) or (int(i[2]) == 1 and sol[int(i[0])] != sol[int(i[1])]) for i in r_list])
+    return np.count_nonzero([ (i[2] == -1 and sol[i[0]] == sol[i[1]]) or (i[2] == 1 and sol[i[0]] != sol[i[1]]) for i in r_list])
 
 
 '''
@@ -141,7 +136,7 @@ def initial_centroids(data, k, seed):
     random.seed(seed)
     max = [np.max([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
     min = [np.min([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
-    return [[random.uniform(max[i], min[i]) for i in range(data.shape[1])] for j in range(k)]
+    return [[random.uniform(max[i], min[j]) for i in range(data.shape[1])] for j in range(k)]
 
 
 def greedy(data, r_matrix, k, seed):
@@ -196,7 +191,3 @@ def local_search(data, r_list, k, seed):
                 neighbourhood = generate_virtual_neighbourhood(n, k, sol)
                 i = 0
     return sol
-
-
-
-
