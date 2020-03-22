@@ -82,7 +82,8 @@ Generate all possible changes from a solution sol
 
 def generate_virtual_neighbourhood (n, k, sol):
     neighbourhood = [[i, c] for c in range(k) for i in range(n) if sol[i] != c]
-    return np.array(random.shuffle(neighbourhood))
+    random.shuffle(neighbourhood)
+    return np.array(neighbourhood)
 
 
 '''
@@ -95,7 +96,7 @@ def infeasibility_total(sol, r_list):
 
 
 '''
-Compute lambda
+Compute lambda factor
 '''
 
 
@@ -131,12 +132,21 @@ def objective(sol, data, k, r_list, l):
     return obj
 
 
+'''
+Compute initial centroids
+'''
+
 
 def initial_centroids(data, k, seed):
     random.seed(seed)
     max = [np.max([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
     min = [np.min([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
-    return [[random.uniform(max[i], min[j]) for i in range(data.shape[1])] for j in range(k)]
+    return [[random.uniform(max[i], min[i]) for i in range(data.shape[1])] for j in range(k)]
+
+
+'''
+Greedy algorithm
+'''
 
 
 def greedy(data, r_matrix, k, seed):
@@ -169,6 +179,12 @@ def greedy(data, r_matrix, k, seed):
     return sol
 
 
+'''
+Local search algorithm
+'''
+
+
+
 def local_search(data, r_list, k, seed):
     n = len(data)
     l = compute_lambda(data, r_list)
@@ -191,3 +207,74 @@ def local_search(data, r_list, k, seed):
                 neighbourhood = generate_virtual_neighbourhood(n, k, sol)
                 i = 0
     return sol
+
+
+'''
+Local search algorithm computing also convergence
+'''
+
+
+def local_search_convergence(data, r_list, k, seed):
+    n = len(data)
+    l = compute_lambda(data, r_list)
+    sol = initial_solution(k, n, seed)
+    iteration = 0
+    i = 0
+    neighbourhood = generate_virtual_neighbourhood(n, k, sol)
+    objective_sol = objective(sol, data, k, r_list, l)
+    objective_sols = [objective_sol]
+    while iteration<100000 and i<len(neighbourhood):
+        neighbour = generate_neighbour(sol, neighbourhood[i])
+        i += 1
+        # If it is a feasible neighbour
+        if len(np.unique(neighbour)) == k:
+            objective_neighbour = objective(neighbour, data, k, r_list, l)
+            iteration += 1
+            # first neighbour that improves actual solution
+            if objective_neighbour < objective_sol:
+                sol = copy.deepcopy(neighbour)
+                objective_sol = copy.deepcopy(objective_neighbour)
+                objective_sols.append(objective_sol)
+                neighbourhood = generate_virtual_neighbourhood(n, k, sol)
+                i = 0
+    return sol, objective_sols
+
+
+'''
+Greedy algorithm computing also convergence
+'''
+
+
+def greedy_convergence(data, r_matrix, k, seed, r_list):
+    # Number of items to cluster
+    n = len(data)
+    rsi = np.array(range(data.shape[0]))
+    # Shuffle the indexes
+    random.seed(seed)
+    random.shuffle(rsi)
+    # Compute initial centroids
+    centroids = initial_centroids(data, k, seed)
+    # Clusters
+    sol = np.full(n, -1)
+    # Objective function
+    objective_sols = []
+    # Lambda
+    l = compute_lambda(data, r_list)
+    while True:
+        old_sol = np.copy(sol)
+        for i in rsi:
+            infeas = [infeasibility(i, ci, r_matrix, sol) for ci in range(k)]
+            min_inf = np.where(infeas == np.min(infeas))[0]
+            if len(min_inf) == 1:
+                best_cluster = min_inf[0]
+            else:
+                distances = np.array([[distance.euclidean(data[i], centroids[c]), c] for c in min_inf])
+                best_cluster = distances[np.argmin(distances[:, 0]), 1]
+            # Assign the element to the best cluster
+            sol[i] = int(best_cluster)
+        # Update centroid uk with the average instances of its associated cluster ci
+        centroids = compute_centroids(data, sol, k)
+        objective_sols.append(objective(sol, data, k, r_list,l))
+        if np.array_equal(old_sol, sol):
+            break
+    return sol, objective_sols
