@@ -145,9 +145,16 @@ def uniform_crossover(individual_1, individual_2, n):
     son = individual_1
     genes = np.random.randint(0, n, int(n/2))
     for i in genes:
-        son[i]=individual_2[i]
+        son[i] = individual_2[i]
     return son
 
+
+def two_points_crossover(individual_1, individual_2, n):
+    r = random.randint(0, n)
+    v = random.randint(0, n)
+    son = uniform_crossover(individual_1, individual_2, n)
+    son[r, ((r+v) % n) - 1] = individual_1[r, ((r+v) % n) - 1]
+    return son
 
 
 # chromosomes = 50
