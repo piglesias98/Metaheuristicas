@@ -122,7 +122,59 @@ def objective(sol, data, k, r_list, l):
     return obj
 
 
-def agg(data, r_list, k, seed):
+def initial_population(k,n, chromosomes, seed):
+    population = []
+    for i in range(chromosomes):
+        population.append(initial_solution(k, n, seed))
+    return population
+
+
+def binary_tournament_agg(population, chromosomes):
+    parents = []
+    for i in range(chromosomes):
+        indiviual_1 = random.choice(population)
+        indiviual_2 = random.choice(population)
+        if objective(indiviual_1, data, k, r_list, l) > objective(indiviual_2, data, k, r_list, l):
+            parents.append(indiviual_1)
+        else:
+            parents.append(indiviual_2)
+    return parents
+
+
+def uniform_crossover(individual_1, individual_2, n):
+    son = individual_1
+    genes = np.random.randint(0, n, int(n/2))
+    for i in genes:
+        son[i]=individual_2[i]
+    return son
+
+
+
+# chromosomes = 50
+def agg(data, r_list, k, seed, chromosomes):
+    n = len(data)
+    t = 0
+    evaluations = 0
+    # Initialize P(0)
+    population = initial_population(k, n, chromosomes, seed)
+    # Evaluate P(0)
+
+    while (evaluations < 100000):
+        # Selection
+        parents = binary_tournament_agg(population, chromosomes)
+        t = t+1
+        seleccionar
+        recombinar
+        reemplazar
+        evaluar
+
+def memetic(data, r_list, k, seed, xi):
     n = len(data)
     l = compute_lambda(data, r_list)
     sol = initial_solution(k, n, seed)
+    errors = 0
+    improvement = True
+    i = 0
+    while (improvement or errors < xi) and i<n:
+        improvement = False
+
