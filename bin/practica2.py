@@ -2,7 +2,7 @@ import numpy as np
 import random
 from scipy.spatial import distance
 from itertools import combinations
-import copy
+import time
 
 '''
 Read data file and convert it to np array
@@ -54,9 +54,8 @@ Computes random initial solution of n lenght with k clusters
 '''
 
 
-def initial_solution(k, n, seed):
-    np.random.seed(seed)
-    initial_sol = np.random.randint(0, k, n)
+def initial_solution(k, n):
+    initial_sol = np.random.randint(0, k, size=n)
     # If the solution is not feasible try again
     if len(np.unique(initial_sol)) != k:
         initial_solution(k, n)
@@ -122,59 +121,108 @@ def objective(sol, data, k, r_list, l):
     return obj
 
 
-def initial_population(k,n, chromosomes, seed):
+def initial_population(k,n, chromosomes):
     population = []
     for i in range(chromosomes):
-        population.append(initial_solution(k, n, seed))
+        population.append(initial_solution(k, n))
     return population
 
 
 def binary_tournament_agg(population, chromosomes):
     parents = []
     for i in range(chromosomes):
-        indiviual_1 = random.choice(population)
-        indiviual_2 = random.choice(population)
-        if objective(indiviual_1, data, k, r_list, l) > objective(indiviual_2, data, k, r_list, l):
-            parents.append(indiviual_1)
+        individual_1 = random.choice(population)
+        individual_2 = random.choice(population)
+        if individual_1[1] > individual_2[1]:
+            parents.append(individual_1)
         else:
-            parents.append(indiviual_2)
-    return parents
+            parents.append(individual_2)
+    return np.array(parents)
 
 
 def uniform_crossover(individual_1, individual_2, n):
-    son = individual_1
+    child = np.copy(individual_1)
     genes = np.random.randint(0, n, int(n/2))
     for i in genes:
-        son[i] = individual_2[i]
-    return son
+        child[i] = individual_2[i]
+    return child
 
 
 def two_points_crossover(individual_1, individual_2, n):
-    r = random.randint(0, n)
-    v = random.randint(0, n)
-    son = uniform_crossover(individual_1, individual_2, n)
-    son[r, ((r+v) % n) - 1] = individual_1[r, ((r+v) % n) - 1]
-    return son
+    r = random.randint(0, n-1)
+    v = random.randint(0, n-1)
+    child = uniform_crossover(individual_1, individual_2, n)
+    child[r, ((r+v) % n) - 1] = individual_1[r, ((r+v) % n) - 1]
+    return child
+
+
+def mutation(sol, n, k):
+    mutated = np.copy(sol)
+    mutated[random.randint(0, n-1)] = random.randint(0, k-1)
+    return mutated
+
+
+def evaluate_initial_population(population, data, k, r_list, l):
+    evaluations = [[population[i], objective(population[i], data, k, r_list, l)] for i in range(len(population))]
+    return evaluations
 
 
 # chromosomes = 50
-def agg(data, r_list, k, seed, chromosomes):
+def agg(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
     n = len(data)
-    t = 0
-    evaluations = 0
+    n_crossovers = int(chromosomes * prob_crossover)
+    n_mutations = int(n * chromosomes * prob_mutation)
+    l = compute_lambda(data, r_list)
     # Initialize P(0)
-    population = initial_population(k, n, chromosomes, seed)
+    population = initial_population(k, n, chromosomes)
     # Evaluate P(0)
-
-    while (evaluations < 100000):
+    population = evaluate_initial_population(population, data, k, r_list, l)
+    evaluations = chromosomes
+    population = np.array(population)
+    best = population[np.argmin(population[:, 1])]
+    while evaluations < 100000:
+        print(evaluations)
         # Selection
         parents = binary_tournament_agg(population, chromosomes)
-        t = t+1
-        seleccionar
-        recombinar
-        reemplazar
-        evaluar
+        # Crossover
+        intermediate = np.copy(parents)
+        # Only chromosomes * prob_crossover
+        parents = parents[:n_crossovers]
+        i = 0
+        for j, q in zip(parents[0::2], parents[1::2]):
+            for w in range(2):
+                child = crossover(j[0], q[0], n)
+                if len(np.unique(child)) != k:
+                    # Reparation
+                    for cluster in range(k):
+                        if cluster not in child:
+                            child[random.randint(0, n-1)] = cluster
+                intermediate[i][0] = child
+                intermediate[i][1] = objective(child, data, k, r_list, l)
+                evaluations = evaluations + 1
+                i = i + 1
+            # Mutation
+        children = np.copy(intermediate)
+        for m in range(n_mutations):
+            children[m][0] = mutation(children[m][0], n, k)
+            if len(np.unique(children[m][0])) != k:
+                # Reparation
+                for cluster in range(k):
+                    if cluster not in children[m][0]:
+                        children[m][0][random.randint(0, n-1)] = cluster
+            children[m][1] = objective(children[m][0], data, k, r_list, l)
+            evaluations = evaluations + 1
+        # Insert offspring into the population
+        population = np.copy(children)
+        best_new = population[np.argmin(population[:, 1])]
+        if best[1] not in population[:, 1]:
+            population[np.argmax(population[:, 1])] = best
+        best = np.copy(best_new)
 
+    return population
+
+
+'''
 def memetic(data, r_list, k, seed, xi):
     n = len(data)
     l = compute_lambda(data, r_list)
@@ -184,4 +232,14 @@ def memetic(data, r_list, k, seed, xi):
     i = 0
     while (improvement or errors < xi) and i<n:
         improvement = False
+        
+'''
 
+data = read_file("bin/iris_set.dat")
+r_matrix = read_file("bin/iris_set_const_10.const")
+r_list = build_restrictions_list(r_matrix)
+start_time = time.time()
+sol = agg(data, r_list, 3, 50, uniform_crossover, 0.7, 0.001)
+time_sol = time.time() - start_time
+print(sol[0][0])
+print(sol[0][1])
