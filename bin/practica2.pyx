@@ -222,39 +222,80 @@ def agg(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
     return population
 
 
-# Parameters:
-executions = 5
-datasets = ["iris", "ecoli", "rand", "newthyroid"]
-clusters = [3, 8, 3, 3]
-restrictions = ["10", "20"]
-# Results file
-f = open("bin/agg_uniform_crossover_results.txt", "w")
+def age(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
+    n = len(data)
+    n_crossovers = int(chromosomes * prob_crossover)
+    n_mutations = int(n * chromosomes * prob_mutation)
+    l = compute_lambda(data, r_list)
+    # Initialize P(0)
+    population = initial_population(k, n, chromosomes)
+    # Evaluate P(0)
+    population = evaluate_initial_population(population, data, k, r_list, l)
+    evaluations = chromosomes
+    population = np.array(population)
+    best = population[np.argmin(population[:, 1])]
+    while evaluations < 100000:
+        print(evaluations)
+        # Selection
+        parents = binary_tournament_agg(population, chromosomes)
+        # Crossover
+        intermediate = np.copy(parents)
+        # Only chromosomes * prob_crossover
+        parents = parents[:n_crossovers]
+        i = 0
+        for j, q in zip(parents[0::2], parents[1::2]):
+            for w in range(2):
+                child = crossover(j[0], q[0], n)
+                if len(np.unique(child)) != k:
+                    # Reparation
+                    for cluster in range(k):
+                        if cluster not in child:
+                            child[random.randint(0, n-1)] = cluster
+                intermediate[i][0] = child
+                intermediate[i][1] = objective(child, data, k, r_list, l)
+                evaluations = evaluations + 1
+                i = i + 1
+            # Mutation
+        children = np.copy(intermediate)
+        for m in range(n_mutations):
+            children[m][0] = mutation(children[m][0], n, k)
+            if len(np.unique(children[m][0])) != k:
+                # Reparation
+                for cluster in range(k):
+                    if cluster not in children[m][0]:
+                        children[m][0][random.randint(0, n-1)] = cluster
+            children[m][1] = objective(children[m][0], data, k, r_list, l)
+            evaluations = evaluations + 1
+        # Insert offspring into the population
+        population = np.copy(children)
+        best_new = population[np.argmin(population[:, 1])]
+        if best[1] not in population[:, 1]:
+            population[np.argmax(population[:, 1])] = best
+        best = np.copy(best_new)
+
+    return population
 
 
-def results():
-    for d in range(len(datasets)):
-        data = read_file("bin/"+datasets[d]+"_set.dat")
-        f.write("\n\n------------------------------------  "+datasets[d]+"  ------------------------------------\n")
-        print(datasets[d])
-        for r in restrictions:
-            r_matrix = read_file("bin/"+datasets[d]+"_set_const_"+r+".const")
-            r_list = build_restrictions_list(r_matrix)
-            f.write("\n\n--------> Restriction: " + r + "\n")
-            print("Restriction: ", r)
-            for i in range(executions):
-                f.write("--EXECUTION: " + str(i) + "\n")
-                print("Execution: ", i)
-                start_time = time.time()
-                population = agg(data, r_list, clusters[d], 50, uniform_crossover, 0.7, 0.001)
-                time_sol = time.time() - start_time
-                f.write("TIME: " + str(time_sol) + "\n\n")
-                for p in population:
-                    f.write("SOL: " + str(p[0]) + "\n")
-                    f.write("OBJ_RATE: " + str(p[1]) + "\n")
-                    c_rate = c(p[0], data, clusters[d])
-                    inf_rate = infeasibility_total(p[0], r_list)
-                    f.write("C_RATE: " + str(c_rate) + "\n")
-                    f.write("INF_RATE: " + str(inf_rate) + "\n")
+'''
+def memetic(data, r_list, k, seed, xi):
+    n = len(data)
+    l = compute_lambda(data, r_list)
+    sol = initial_solution(k, n, seed)
+    errors = 0
+    improvement = True
+    i = 0
+    while (improvement or errors < xi) and i<n:
+        improvement = False
+        
+'''
 
-
-results()
+data = read_file("bin/ecoli_set.dat")
+r_matrix = read_file("bin/ecoli_set_const_20.const")
+r_list = build_restrictions_list(r_matrix)
+start_time = time.time()
+sol = agg(data, r_list, 8, 50, uniform_crossover, 0.7, 0.001)
+for i in sol:
+    print(i[0])
+    print(i[1])
+time_sol = time.time() - start_time
+print(time_sol)
