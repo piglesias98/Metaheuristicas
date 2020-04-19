@@ -140,6 +140,18 @@ def binary_tournament_agg(population, chromosomes):
     return np.array(parents)
 
 
+def binary_tournament_age(population):
+    parents = []
+    for i in range(2):
+        individual_1 = random.choice(population)
+        individual_2 = random.choice(population)
+        if individual_1[1] < individual_2[1]:
+            parents.append(individual_1)
+        else:
+            parents.append(individual_2)
+    return np.array(parents)
+
+
 def uniform_crossover(individual_1, individual_2, n):
     child = np.copy(individual_1)
     genes = np.random.randint(0, n, int(n/2))
@@ -152,7 +164,7 @@ def two_points_crossover(individual_1, individual_2, n):
     r = random.randint(0, n-1)
     v = random.randint(0, n-1)
     child = uniform_crossover(individual_1, individual_2, n)
-    child[r, ((r+v) % n) - 1] = individual_1[r, ((r+v) % n) - 1]
+    child[np.arange(r, r+v) % n] = individual_1[np.arange(r, r+v) % n]
     return child
 
 
@@ -222,13 +234,67 @@ def agg(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
     return population
 
 
+def age(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
+    n = len(data)
+    n_crossovers = int(chromosomes * prob_crossover)
+    n_mutations = int(n * chromosomes * prob_mutation)
+    l = compute_lambda(data, r_list)
+    # Initialize P(0)
+    population = initial_population(k, n, chromosomes)
+    # Evaluate P(0)
+    population = evaluate_initial_population(population, data, k, r_list, l)
+    evaluations = chromosomes
+    population = np.array(population)
+    best = population[np.argmin(population[:, 1])]
+    while evaluations < 100000:
+        print(evaluations)
+        # Selection
+        parents = binary_tournament_agg(population, chromosomes)
+        # Crossover
+        intermediate = np.copy(parents)
+        # Only chromosomes * prob_crossover
+        parents = parents[:n_crossovers]
+        i = 0
+        for j, q in zip(parents[0::2], parents[1::2]):
+            for w in range(2):
+                child = crossover(j[0], q[0], n)
+                if len(np.unique(child)) != k:
+                    # Reparation
+                    for cluster in range(k):
+                        if cluster not in child:
+                            child[random.randint(0, n-1)] = cluster
+                intermediate[i][0] = child
+                intermediate[i][1] = objective(child, data, k, r_list, l)
+                evaluations = evaluations + 1
+                i = i + 1
+            # Mutation
+        children = np.copy(intermediate)
+        for m in range(n_mutations):
+            children[m][0] = mutation(children[m][0], n, k)
+            if len(np.unique(children[m][0])) != k:
+                # Reparation
+                for cluster in range(k):
+                    if cluster not in children[m][0]:
+                        children[m][0][random.randint(0, n-1)] = cluster
+            children[m][1] = objective(children[m][0], data, k, r_list, l)
+            evaluations = evaluations + 1
+        # Insert offspring into the population
+        population = np.copy(children)
+        best_new = population[np.argmin(population[:, 1])]
+        if best[1] not in population[:, 1]:
+            population[np.argmax(population[:, 1])] = best
+        best = np.copy(best_new)
+
+    return population
+
+
 # Parameters:
 executions = 5
 datasets = ["iris", "ecoli", "rand", "newthyroid"]
 clusters = [3, 8, 3, 3]
 restrictions = ["10", "20"]
 # Results file
-f = open("bin/agg_uniform_crossover_results.txt", "w")
+f = open("agg_two_points_crossover_results.txt", "w")
 
 
 def results():
@@ -245,11 +311,11 @@ def results():
                 f.write("--EXECUTION: " + str(i) + "\n")
                 print("Execution: ", i)
                 start_time = time.time()
-                population = agg(data, r_list, clusters[d], 50, uniform_crossover, 0.7, 0.001)
+                population = agg(data, r_list, clusters[d], 50, two_points_crossover, 0.7, 0.001)
                 time_sol = time.time() - start_time
                 f.write("TIME: " + str(time_sol) + "\n\n")
                 for p in population:
-                    f.write("SOL: " + str(p[0]) + "\n")
+                    # f.write("SOL: " + str(p[0]) + "\n")
                     f.write("OBJ_RATE: " + str(p[1]) + "\n")
                     c_rate = c(p[0], data, clusters[d])
                     inf_rate = infeasibility_total(p[0], r_list)
