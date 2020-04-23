@@ -193,7 +193,6 @@ def agg(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
     population = np.array(population)
     best = population[np.argmin(population[:, 1])]
     while evaluations < 100000:
-        print(evaluations)
         # Selection
         parents = binary_tournament_agg(population, chromosomes)
         # Crossover
@@ -234,10 +233,8 @@ def agg(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
     return population
 
 
-def age(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
+def age(data, r_list, k, chromosomes, crossover, prob_mutation):
     n = len(data)
-    n_crossovers = int(chromosomes * prob_crossover)
-    n_mutations = int(n * chromosomes * prob_mutation)
     l = compute_lambda(data, r_list)
     # Initialize P(0)
     population = initial_population(k, n, chromosomes)
@@ -245,47 +242,41 @@ def age(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
     population = evaluate_initial_population(population, data, k, r_list, l)
     evaluations = chromosomes
     population = np.array(population)
-    best = population[np.argmin(population[:, 1])]
     while evaluations < 100000:
         print(evaluations)
         # Selection
-        parents = binary_tournament_agg(population, chromosomes)
+        parents = binary_tournament_age(population)
         # Crossover
-        intermediate = np.copy(parents)
-        # Only chromosomes * prob_crossover
-        parents = parents[:n_crossovers]
-        i = 0
-        for j, q in zip(parents[0::2], parents[1::2]):
-            for w in range(2):
-                child = crossover(j[0], q[0], n)
-                if len(np.unique(child)) != k:
-                    # Reparation
-                    for cluster in range(k):
-                        if cluster not in child:
-                            child[random.randint(0, n-1)] = cluster
-                intermediate[i][0] = child
-                intermediate[i][1] = objective(child, data, k, r_list, l)
-                evaluations = evaluations + 1
-                i = i + 1
-            # Mutation
-        children = np.copy(intermediate)
-        for m in range(n_mutations):
-            children[m][0] = mutation(children[m][0], n, k)
-            if len(np.unique(children[m][0])) != k:
+        intermediate = []
+        for w in range(2):
+            child = crossover(parents[w][0], parents[w][0], n)
+            if len(np.unique(child)) != k:
                 # Reparation
                 for cluster in range(k):
-                    if cluster not in children[m][0]:
-                        children[m][0][random.randint(0, n-1)] = cluster
-            children[m][1] = objective(children[m][0], data, k, r_list, l)
+                    if cluster not in child:
+                        child[random.randint(0, n-1)] = cluster
+            intermediate.append([child, objective(child, data, k, r_list, l)])
             evaluations = evaluations + 1
+        # Mutation
+        children = np.copy(intermediate)
+        for child in children:
+            if random.random() < prob_mutation:
+                child[0] = mutation(child[0], n, k)
+                if len(np.unique(child[0])) != k:
+                    # Reparation
+                    for cluster in range(k):
+                        if cluster not in child[0]:
+                            child[0][random.randint(0, n-1)] = cluster
+                child[1] = objective(child[0], data, k, r_list, l)
+                evaluations = evaluations + 1
         # Insert offspring into the population
-        population = np.copy(children)
-        best_new = population[np.argmin(population[:, 1])]
-        if best[1] not in population[:, 1]:
-            population[np.argmax(population[:, 1])] = best
-        best = np.copy(best_new)
-
+        # Worst two solutions
+        worst = np.argpartition(population[:, 1], -2)[-2:]
+        possible = np.concatenate((population[worst], children))
+        best = np.argpartition(possible[:,1], 2)[:2]
+        population[worst] = possible[best]
     return population
+
 
 
 # Parameters:
@@ -294,7 +285,7 @@ datasets = ["iris", "ecoli", "rand", "newthyroid"]
 clusters = [3, 8, 3, 3]
 restrictions = ["10", "20"]
 # Results file
-f = open("agg_two_points_crossover_results.txt", "w")
+f = open("age_prueba", "w")
 
 
 def results():
@@ -311,11 +302,12 @@ def results():
                 f.write("--EXECUTION: " + str(i) + "\n")
                 print("Execution: ", i)
                 start_time = time.time()
-                population = agg(data, r_list, clusters[d], 50, two_points_crossover, 0.7, 0.001)
+                # population = agg(data, r_list, clusters[d], 50, two_points_crossover, 0.7, 0.001)
+                population = age(data, r_list, clusters[d], 50, uniform_crossover, 0.001)
                 time_sol = time.time() - start_time
                 f.write("TIME: " + str(time_sol) + "\n\n")
                 for p in population:
-                    # f.write("SOL: " + str(p[0]) + "\n")
+                    f.write("SOL: " + str(p[0]) + "\n")
                     f.write("OBJ_RATE: " + str(p[1]) + "\n")
                     c_rate = c(p[0], data, clusters[d])
                     inf_rate = infeasibility_total(p[0], r_list)
@@ -323,4 +315,44 @@ def results():
                     f.write("INF_RATE: " + str(inf_rate) + "\n")
 
 
-results()
+# results()
+
+
+def run_in_parallel(d):
+    # Results file
+    f = open("age_two_points_crossover_second_version_" + datasets[d] + ".txt", "w")
+    data = read_file("bin/" + datasets[d] + "_set.dat")
+    f.write("\n\n------------------------------------  " + datasets[d] + "  ------------------------------------\n")
+    print(datasets[d])
+    for r in restrictions:
+        r_matrix = read_file("bin/" + datasets[d] + "_set_const_" + r + ".const")
+        r_list = build_restrictions_list(r_matrix)
+        f.write("\n\n--------> Restriction: " + r + "\n")
+        print("Restriction: ", r)
+        for i in range(executions):
+            f.write("--EXECUTION: " + str(i) + "\n")
+            print("Execution: ", i)
+            start_time = time.time()
+            # population = agg(data, r_list, clusters[d], 50, two_points_crossover, 0.7, 0.001)
+            population = age(data, r_list, clusters[d], 50, two_points_crossover, 0.001)
+            time_sol = time.time() - start_time
+            f.write("TIME: " + str(time_sol) + "\n\n")
+            p = population[np.argmin(population[:, 1])]
+            f.write("SOL: " + str(p[0]) + "\n")
+            f.write("OBJ_RATE: " + str(p[1]) + "\n")
+            c_rate = c(p[0], data, clusters[d])
+            inf_rate = infeasibility_total(p[0], r_list)
+            f.write("C_RATE: " + str(c_rate) + "\n")
+            f.write("INF_RATE: " + str(inf_rate) + "\n")
+
+
+from multiprocessing import Pool
+
+argument = [0,1,2,3]
+
+
+if __name__ == '__main__':
+    pool = Pool()
+    pool.map(run_in_parallel, argument)
+    pool.close()
+    pool.join()
