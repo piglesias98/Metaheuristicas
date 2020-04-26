@@ -56,8 +56,10 @@ Computes random initial solution of n lenght with k clusters
 
 
 def initial_solution(k, n):
+    # Se genera un array de tamaño n con números entre 0 y k,
+    # donde k es el número de clústers
     initial_sol = np.random.randint(0, k, size=n)
-    # If the solution is not feasible try again
+    # Si la solución no es factible llamamos de nuevo a la función
     if len(np.unique(initial_sol)) != k:
         initial_solution(k, n)
     else:
@@ -141,11 +143,16 @@ def initial_population(k,n, chromosomes):
 
 def binary_tournament_agg(population, chromosomes):
     parents = []
+    # Para cada cromosoma de la población
     for i in range(chromosomes):
+        # Escogemos dos individuos aleatoriamente
         individual_1 = random.choice(population)
         individual_2 = random.choice(population)
+        # Si la función objetivo del individuo 1 es mejor,
+        # escogeremos este individuo
         if individual_1[1] < individual_2[1]:
             parents.append(individual_1)
+        # Si es al contrario, escogeremos el individuo 2
         else:
             parents.append(individual_2)
     return np.array(parents)
@@ -164,25 +171,48 @@ def binary_tournament_age(population):
 
 
 def uniform_crossover(individual_1, individual_2, n):
+    # El hijo copiará en primer lugar todos
+    # los genes del primer padre
     child = np.copy(individual_1)
+    # Se generan n/2 números aleatorios distintos
+    # en el rango {0,1, … , n-1}.
     genes = np.random.randint(0, n, int(n/2))
+    # Asignamos al hijo los genes de estos números
+    # generados del segundo padre
     for i in genes:
         child[i] = individual_2[i]
     return child
 
 
 def two_points_crossover(individual_1, individual_2, n):
+    # Inicio del segmento
     r = random.randint(0, n-1)
+    # Tamaño del segmento
     v = random.randint(0, n-1)
+    # Realizamos un cruce uniforme y copiamos todos los genes
+    # resultantes al hijo
     child = uniform_crossover(individual_1, individual_2, n)
+    # Modificamos los elementos del hijo con los del padre que
+    # caigan dentro del intervalo {r, (r+v) mod n – 1}
     child[np.arange(r, r+v) % n] = individual_1[np.arange(r, r+v) % n]
     return child
 
 
 def mutation(sol, n, k):
-    mutated = np.copy(sol)
-    mutated[random.randint(0, n-1)] = random.randint(0, k-1)
-    return mutated
+    # El gen será una posición aleatoria del cromosoma
+    gen = random.randint(0, n-1)
+    # El valor será uno distinto al actual
+    cluster = random.randint(0, k-1)
+    old_cluster = sol[gen]
+    sol[gen] = cluster
+    # Nos aseguramos de que sea una solución factible
+    while len(np.unique(sol)) != k or old_cluster == cluster:
+        sol[gen] = old_cluster
+        gen = random.randint(0, n-1)
+        old_cluster = sol[gen]
+        cluster = random.randint(0, k - 1)
+        sol[gen] = cluster
+    return sol
 
 
 def evaluate_initial_population(population, data, k, r_list, l):
@@ -196,6 +226,7 @@ def reparation(child, n, k):
         if cluster not in child:
             repaired[random.randint(0, n - 1)] = cluster
     return repaired
+
 
 # chromosomes = 50
 def agg(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
@@ -211,34 +242,28 @@ def agg(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
     population = np.array(population)
     best = population[np.argmin(population[:, 1])]
     while evaluations < 100000:
+        print(evaluations)
         # Selection
         parents = binary_tournament_agg(population, chromosomes)
         # Crossover
         intermediate = np.copy(parents)
+        i = 0
         # Only chromosomes * prob_crossover
         parents = parents[:n_crossovers]
-        i = 0
         for j, q in zip(parents[0::2], parents[1::2]):
             for w in range(2):
                 child = crossover(j[0], q[0], n)
                 if len(np.unique(child)) != k:
                     # Reparation
-                    for cluster in range(k):
-                        if cluster not in child:
-                            child[random.randint(0, n-1)] = cluster
+                    child = reparation(child, n, k)
                 intermediate[i][0] = child
                 intermediate[i][1] = objective(child, data, k, r_list, l)
-                evaluations = evaluations + 1
                 i = i + 1
-            # Mutation
+                evaluations = evaluations + 1
+        # Mutation
         children = np.copy(intermediate)
         for m in range(n_mutations):
             children[m][0] = mutation(children[m][0], n, k)
-            if len(np.unique(children[m][0])) != k:
-                # Reparation
-                for cluster in range(k):
-                    if cluster not in children[m][0]:
-                        children[m][0][random.randint(0, n-1)] = cluster
             children[m][1] = objective(children[m][0], data, k, r_list, l)
             evaluations = evaluations + 1
         # Insert offspring into the population
@@ -276,9 +301,6 @@ def age(data, r_list, k, chromosomes, crossover, prob_mutation):
         for child in intermediate:
             if random.random() < prob_mutation * n:
                 child= mutation(child, n, k)
-                if len(np.unique(child)) != k:
-                    # Reparation
-                    child  = reparation(child, n, k)
             children.append([child, objective(child, data, k, r_list, l)])
             evaluations = evaluations + 1
         # Insert offspring into the population
@@ -334,10 +356,9 @@ def memetic (n_generations, perc, pick_best, data, r_list, k, chromosomes, cross
         # Selection
         parents = binary_tournament_agg(population, chromosomes)
         # Crossover
-        intermediate = np.copy(parents)
+        intermediate = []
         # Only chromosomes * prob_crossover
         parents = parents[:n_crossovers]
-        i = 0
         for j, q in zip(parents[0::2], parents[1::2]):
             for w in range(2):
                 child = crossover(j[0], q[0], n)
@@ -346,10 +367,8 @@ def memetic (n_generations, perc, pick_best, data, r_list, k, chromosomes, cross
                     for cluster in range(k):
                         if cluster not in child:
                             child[random.randint(0, n - 1)] = cluster
-                intermediate[i][0] = child
-                intermediate[i][1] = objective(child, data, k, r_list, l)
+                intermediate.append([child, objective(child, data, k, r_list, l)])
                 evaluations = evaluations + 1
-                i = i + 1
             # Mutation
         children = np.copy(intermediate)
         for m in range(n_mutations):
@@ -378,8 +397,8 @@ def memetic (n_generations, perc, pick_best, data, r_list, k, chromosomes, cross
                 if perc == 1:
                     subset = np.arange(chromosomes)
                 else:
-                    subset = np.random.randint(0, n, int(perc * chromosomes))
-            population, new_evaluations = map(list, zip(*[soft_local_search(sol, data, k, r_list, l) for sol in population[subset]]))
+                    subset = random.sample(range(chromosomes), int(perc*chromosomes))
+            population[subset], new_evaluations = map(list, zip(*[soft_local_search(sol, data, k, r_list, l) for sol in population[subset]]))
             evaluations = evaluations + np.sum(new_evaluations)
     return population
 
@@ -391,91 +410,70 @@ restrictions = ["10", "20"]
 
 
 
-# # sol = initial_solution(8, len(data))
-# # sol2   = soft_local_search(sol, 8, r_list, compute_lambda(data, r_list))
-# start_time = time.time()
+# sol = initial_solution(8, len(data))
+# sol2   = soft_local_search(sol, 8, r_list, compute_lambda(data, r_list))
+start_time = time.time()
 # population = memetic(n_generations= 10, perc= 1, pick_best= False, data = data,
 #                      r_list = r_list, k = 3, chromosomes = 50, crossover = uniform_crossover,
 #                      prob_crossover = 0.7, prob_mutation = 0.001)
-# time_sol = time.time() - start_time
-# for p in population:
-#     print("SOL: " + str(p[0]) + "\n")
-#     print("OBJ_RATE: " + str(p[1]) + "\n")
-#     c_rate = c(p[0], data, 3)
-#     inf_rate = infeasibility_total(p[0], r_list)
-#     print("C_RATE: " + str(c_rate) + "\n")
-#     print("INF_RATE: " + str(inf_rate) + "\n")
-#
-# def results():
-#     for d in range(len(datasets)):
-#         data = read_file("bin/"+datasets[d]+"_set.dat")
-#         f.write("\n\n------------------------------------  "+datasets[d]+"  ------------------------------------\n")
-#         print(datasets[d])
-#         for r in restrictions:
-#             r_matrix = read_file("bin/"+datasets[d]+"_set_const_"+r+".const")
-#             r_list = build_restrictions_list(r_matrix)
-#             f.write("\n\n--------> Restriction: " + r + "\n")
-#             print("Restriction: ", r)
-#             for i in range(executions):
-#                 f.write("--EXECUTION: " + str(i) + "\n")
-#                 print("Execution: ", i)
-#                 start_time = time.time()
-#                 # population = agg(data, r_list, clusters[d], 50, two_points_crossover, 0.7, 0.001)
-#                 population = age(data, r_list, clusters[d], 50, uniform_crossover, 0.001)
-#                 time_sol = time.time() - start_time
-#                 f.write("TIME: " + str(time_sol) + "\n\n")
-#                 for p in population:
-#                     f.write("SOL: " + str(p[0]) + "\n")
-#                     f.write("OBJ_RATE: " + str(p[1]) + "\n")
-#                     c_rate = c(p[0], data, clusters[d])
-#                     inf_rate = infeasibility_total(p[0], r_list)
-#                     f.write("C_RATE: " + str(c_rate) + "\n")
-#                     f.write("INF_RATE: " + str(inf_rate) + "\n")
-#
-#
-# results()
+d = 1
+data = read_file("bin/ecoli_set.dat")
+r_matrix = read_file("bin/ecoli_set_const_10.const")
+r_list = build_restrictions_list(r_matrix)
+population = agg(data, r_list=r_list, k = 8, chromosomes = 50, crossover=uniform_crossover, prob_crossover=0.1, prob_mutation=0.001)
+time_sol = time.time() - start_time
+p = population[np.argmin(population[:, 1])]
+print("SOL: " + str(p[0]) + "\n")
+print("OBJ_RATE: " + str(p[1]) + "\n")
+c_rate = c(p[0], data, 8)
+inf_rate = infeasibility_total(p[0], r_list)
+print("C_RATE: " + str(c_rate) + "\n")
+print("INF_RATE: " + str(inf_rate) + "\n")
 
 
 def run_in_parallel(d):
-    dataset = 'rand'
-    k = 3
-    random.seed(d*10)
-    # Results file
-    f = open("am_1_1_" + dataset + '_' + str(d) + ".txt", "w")
-    data = read_file("bin/" + dataset + "_set.dat")
-    f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
-    f.write("SEED: " + str(d*10))
-    for r in restrictions:
-        r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
-        r_list = build_restrictions_list(r_matrix)
-        f.write("\n\n--------> Restriction: " + r + "\n")
-        print("Restriction: ", r)
-        start_time = time.time()
-        # population = agg(data, r_list, clusters[d], 50, two_points_crossover, 0.7, 0.001)
-        # population = age(data, r_list, clusters[d], 50, two_points_crossover, 0.001)
-        population = memetic(n_generations=10, perc=1, pick_best=False, data=data, r_list=r_list, k=k, chromosomes=50, crossover=uniform_crossover, prob_crossover=0.7, prob_mutation=0.001)
-        population  = np.array(population)
-        time_sol = time.time() - start_time
-        print(str(time_sol))
-        f.write("TIME: " + str(time_sol) + "\n\n")
-        p = population[np.argmin(population[:, 1])]
-        print("OBJ_RATE: " + str(p[1]) + "\n")
-        f.write("OBJ_RATE: " + str(p[1]) + "\n")
-        c_rate = c(p[0], data, k)
-        inf_rate = infeasibility_total(p[0], r_list)
-        f.write("C_RATE: " + str(c_rate) + "\n")
-        print("C_RATE: " + str(c_rate) + "\n")
-        print("INF_RATE: " + str(inf_rate) + "\n")
-        f.write("INF_RATE: " + str(inf_rate) + "\n")
+    for i in range(4):
+        dataset = datasets[i]
+        k = clusters[i]
+        random.seed(d*10)
+        # Results file
+        f = open("am_10_0.1_v18_" + dataset + '_' + str(d) + ".txt", "w")
+        data = read_file("bin/" + dataset + "_set.dat")
+        f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
+        f.write("SEED: " + str(d*10))
+        for r in restrictions:
+            r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+            r_list = build_restrictions_list(r_matrix)
+            f.write("\n\n--------> Restriction: " + r + "\n")
+            print("Restriction: ", r)
+            start_time = time.time()
+            # population = agg(data, r_list, clusters[d], 50, two_points_crossover, 0.7, 0.001)
+            # population = age(data, r_list, k, 50, two_points_crossover, 0.001)
+            population = memetic(n_generations=10, perc=0.1, pick_best=False, data=data, r_list=r_list, k=k, chromosomes=50, crossover=uniform_crossover, prob_crossover=0.7, prob_mutation=0.001)
+            population  = np.array(population)
+            time_sol = time.time() - start_time
+            print(str(time_sol))
+            f.write("TIME: " + str(time_sol) + "\n\n")
+            p = population[np.argmin(population[:, 1])]
+            print("OBJ_RATE: " + str(p[1]) + "\n")
+            f.write("OBJ_RATE: " + str(p[1]) + "\n")
+            c_rate = c(p[0], data, k)
+            inf_rate = infeasibility_total(p[0], r_list)
+            f.write("C_RATE: " + str(c_rate) + "\n")
+            print("C_RATE: " + str(c_rate) + "\n")
+            print("INF_RATE: " + str(inf_rate) + "\n")
+            f.write("INF_RATE: " + str(inf_rate) + "\n")
 
 
-from multiprocessing import Pool
+# from multiprocessing import Pool
+#
+# argument = [0,1,2,3,4]
+#
+#
+# if __name__ == '__main__':
+#     pool = Pool()
+#     pool.map(run_in_parallel, argument)
+#     pool.close()
+#     pool.join()
+#
 
-argument = [0,1,2,3,4]
-
-
-if __name__ == '__main__':
-    pool = Pool()
-    pool.map(run_in_parallel, argument)
-    pool.close()
-    pool.join()
