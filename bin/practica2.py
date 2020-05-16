@@ -189,12 +189,15 @@ def two_points_crossover(individual_1, individual_2, n):
     r = random.randint(0, n-1)
     # Tamaño del segmento
     v = random.randint(0, n-1)
-    # Realizamos un cruce uniforme y copiamos todos los genes
-    # resultantes al hijo
-    child = uniform_crossover(individual_1, individual_2, n)
-    # Modificamos los elementos del hijo con los del padre que
-    # caigan dentro del intervalo {r, (r+v) mod n – 1}
-    child[np.arange(r, r+v) % n] = individual_1[np.arange(r, r+v) % n]
+    # Los índices que realizarán se copiarán del padre serán
+    two_points = np.arange(r, r+v) % n
+    # Por lo tanto los que realizan cruce uniforme
+    uniform = np.ones(len(individual_1), dtype=bool)
+    uniform[two_points] = False
+    # Copiamos primero el padre
+    child = copy.deepcopy(individual_1)
+    # Realizamos el cruce uniforme con los que caen fuera del intervalo
+    child[uniform] = uniform_crossover(individual_1[uniform], individual_2[uniform], n)
     return child
 
 
@@ -220,10 +223,12 @@ def evaluate_initial_population(population, data, k, r_list, l):
     return evaluations
 
 def reparation(child, n, k):
-    # Reparation
     repaired = np.copy(child)
+    # Comprobamos que cada cluster esté en el hijo
     for cluster in range(k):
         if cluster not in child:
+            # Si no se encuentra seleccionamos un elemento
+            # aleatorio y lo asignamos a ese cluster
             repaired[random.randint(0, n - 1)] = cluster
     return repaired
 
@@ -262,15 +267,24 @@ def agg(data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
                 evaluations = evaluations + 1
         # Mutation
         children = np.copy(intermediate)
+        # Aplicamos la mutación
         for m in range(n_mutations):
-            children[m][0] = mutation(children[m][0], n, k)
-            children[m][1] = objective(children[m][0], data, k, r_list, l)
+            crom = random.randint(0, chromosomes-1)
+            children[crom][0] = mutation(children[crom][0], n, k)
+            # Calculamos la función objetivo
+            children[crom][1] = objective(children[crom][0], data, k, r_list, l)
             evaluations = evaluations + 1
         # Insert offspring into the population
+        # Los hijos reemplazan directamente a la población
         population = np.copy(children)
+        # Calculamos la nueva mejor solución
         best_new = population[np.argmin(population[:, 1])]
+        # Si la mejor solución anterior no ha sobrevivido
         if best[1] not in population[:, 1]:
+            # Sustiuimos la peor solución con la mejor solución
+            # de la población anterior
             population[np.argmax(population[:, 1])] = best
+        # Reemplazamos la mejor solución anterior
         best = np.copy(best_new)
 
     return population
@@ -297,17 +311,23 @@ def age(data, r_list, k, chromosomes, crossover, prob_mutation):
                 child  = reparation(child, n, k)
             intermediate.append(child)
         # Mutation
-        children = []
-        for child in intermediate:
+        children = np.copy(intermediate)
+        for c in range(len(children)):
+            # Con probabilidad prob_mutation,
+            # mutamos un cromosoma
             if random.random() < prob_mutation * n:
-                child= mutation(child, n, k)
-            children.append([child, objective(child, data, k, r_list, l)])
-            evaluations = evaluations + 1
+                children[c][0] = mutation(child, n, k)
+                children[c][1] = objective(child, data, k, r_list, l)
+                evaluations = evaluations + 1
         # Insert offspring into the population
         # Worst two solutions
+        # Calculamos las dos peores soluciones
         worst = np.argpartition(population[:, 1], -2)[-2:]
+        # De las cuatro soluciones (dos peores + dos hijos),
+        # calculamos las dos mejores para reemplazar a las dos peores
         possible = np.concatenate((population[worst], children))
         best = np.argpartition(possible[:,1], 2)[:2]
+        # Las dos peores son reemplazadas por las dos mejores
         population[worst] = possible[best]
     return population
 
@@ -315,18 +335,27 @@ def age(data, r_list, k, chromosomes, crossover, prob_mutation):
 
 def soft_local_search(sol, data, k, r_list, l):
     n = len(sol[0])
+    # Xi será el número máximo de fallos, un 10% del tamaño del cromosoma
     xi = int(0.1*n)
+    # Recorreremos los elementos de forma aleatoria
     rsi = random.sample(range(n), n)
     errors = 0
     improvement = True
     i = 0
+    evaluations = 0
+    # Mientras que haya mejora
+    # No se alcance el número máximo de errores
+    # Se recorre como máximo una vez el cromosoma
     while (improvement or errors < xi) and (i < n):
+        print(evaluations)
         old_sol = copy.deepcopy(sol)
         improvement = False
-        # Assign best possible value to sol[i]objective(sol, data, k, r_list, l)
+        # Asignamos el mejor valor posible a sol[i]
+        # Tiene que tratarse de una solución factible
         obj = np.array([[objective(generate_neighbour(sol[0], [rsi[i], ci]), data, k, r_list, l), ci]  for ci in range(k) if len(np.unique(generate_neighbour(sol[0], [rsi[i], ci]))) == k])
         best = np.argmin(obj[:,0])
-        # Assign the element to the best cluster
+        evaluations = evaluations + len(obj)
+        # Assign al elemento el mejor cluster
         sol[0][rsi[i]] = obj[best][1]
         sol[1] = obj[best][0]
         if np.array_equal(old_sol[0], sol[0]):
@@ -335,7 +364,7 @@ def soft_local_search(sol, data, k, r_list, l):
             improvement = True
         i = i + 1
     # Return sol and evaluations
-    return sol, i*k
+    return sol, evaluations
 
 
 def memetic (n_generations, perc, pick_best, data, r_list, k, chromosomes, crossover, prob_crossover, prob_mutation):
@@ -356,7 +385,8 @@ def memetic (n_generations, perc, pick_best, data, r_list, k, chromosomes, cross
         # Selection
         parents = binary_tournament_agg(population, chromosomes)
         # Crossover
-        intermediate = []
+        intermediate = np.copy(parents)
+        i = 0
         # Only chromosomes * prob_crossover
         parents = parents[:n_crossovers]
         for j, q in zip(parents[0::2], parents[1::2]):
@@ -364,21 +394,19 @@ def memetic (n_generations, perc, pick_best, data, r_list, k, chromosomes, cross
                 child = crossover(j[0], q[0], n)
                 if len(np.unique(child)) != k:
                     # Reparation
-                    for cluster in range(k):
-                        if cluster not in child:
-                            child[random.randint(0, n - 1)] = cluster
-                intermediate.append([child, objective(child, data, k, r_list, l)])
+                    child = reparation(child, n, k)
+                intermediate[i][0] = child
+                intermediate[i][1] = objective(child, data, k, r_list, l)
+                i = i + 1
                 evaluations = evaluations + 1
-            # Mutation
+        # Mutation
         children = np.copy(intermediate)
+        # Aplicamos la mutación
         for m in range(n_mutations):
-            children[m][0] = mutation(children[m][0], n, k)
-            if len(np.unique(children[m][0])) != k:
-                # Reparation
-                for cluster in range(k):
-                    if cluster not in children[m][0]:
-                        children[m][0][random.randint(0, n - 1)] = cluster
-            children[m][1] = objective(children[m][0], data, k, r_list, l)
+            crom = random.randint(0, chromosomes-1)
+            children[crom][0] = mutation(children[crom][0], n, k)
+            # Calculamos la función objetivo
+            children[crom][1] = objective(children[crom][0], data, k, r_list, l)
             evaluations = evaluations + 1
         # Insert offspring into the population
         population = np.copy(children)
@@ -403,32 +431,11 @@ def memetic (n_generations, perc, pick_best, data, r_list, k, chromosomes, cross
     return population
 
 
+
 executions = 5
 datasets = ["iris", "ecoli", "rand", "newthyroid"]
 clusters = [3, 8, 3, 3]
 restrictions = ["10", "20"]
-
-
-
-# sol = initial_solution(8, len(data))
-# sol2   = soft_local_search(sol, 8, r_list, compute_lambda(data, r_list))
-start_time = time.time()
-# population = memetic(n_generations= 10, perc= 1, pick_best= False, data = data,
-#                      r_list = r_list, k = 3, chromosomes = 50, crossover = uniform_crossover,
-#                      prob_crossover = 0.7, prob_mutation = 0.001)
-d = 1
-data = read_file("bin/ecoli_set.dat")
-r_matrix = read_file("bin/ecoli_set_const_10.const")
-r_list = build_restrictions_list(r_matrix)
-population = agg(data, r_list=r_list, k = 8, chromosomes = 50, crossover=uniform_crossover, prob_crossover=0.1, prob_mutation=0.001)
-time_sol = time.time() - start_time
-p = population[np.argmin(population[:, 1])]
-print("SOL: " + str(p[0]) + "\n")
-print("OBJ_RATE: " + str(p[1]) + "\n")
-c_rate = c(p[0], data, 8)
-inf_rate = infeasibility_total(p[0], r_list)
-print("C_RATE: " + str(c_rate) + "\n")
-print("INF_RATE: " + str(inf_rate) + "\n")
 
 
 def run_in_parallel(d):
@@ -465,15 +472,15 @@ def run_in_parallel(d):
             f.write("INF_RATE: " + str(inf_rate) + "\n")
 
 
-# from multiprocessing import Pool
-#
-# argument = [0,1,2,3,4]
-#
-#
-# if __name__ == '__main__':
-#     pool = Pool()
-#     pool.map(run_in_parallel, argument)
-#     pool.close()
-#     pool.join()
-#
+from multiprocessing import Pool
+
+argument = [0,1,2,3,4]
+
+
+if __name__ == '__main__':
+    pool = Pool()
+    pool.map(run_in_parallel, argument)
+    pool.close()
+    pool.join()
+
 

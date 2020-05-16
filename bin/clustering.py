@@ -3,7 +3,7 @@ import random
 from scipy.spatial import distance
 from itertools import combinations
 import copy
-
+import time
 '''
 Read data file and convert it to np array
 '''
@@ -189,17 +189,18 @@ def local_search(data, r_list, k, seed):
     n = len(data)
     l = compute_lambda(data, r_list)
     sol = initial_solution(k, n, seed)
-    iteration = 0
+    evaluations = 0
     i = 0
     neighbourhood = generate_virtual_neighbourhood(n, k, sol)
     objective_sol = objective(sol, data, k, r_list, l)
-    while iteration<100000 and i<len(neighbourhood):
+    while evaluations<100000 and i<len(neighbourhood):
+        print(evaluations)
         neighbour = generate_neighbour(sol, neighbourhood[i])
         i += 1
         # If it is a feasible neighbour
         if len(np.unique(neighbour)) == k:
             objective_neighbour = objective(neighbour, data, k, r_list, l)
-            iteration += 1
+            evaluations += 1
             # first neighbour that improves actual solution
             if objective_neighbour < objective_sol:
                 sol = copy.deepcopy(neighbour)
@@ -278,3 +279,25 @@ def greedy_convergence(data, r_matrix, k, seed, r_list):
         if np.array_equal(old_sol, sol):
             break
     return sol, objective_sols
+
+
+data = read_file("bin/newthyroid_set.dat")
+r_matrix = read_file("bin/newthyroid_set_const_20.const")
+r_list = build_restrictions_list(r_matrix)
+f = open("greedy_newthyroid_restriction_20.txt", "w")
+for i in range(5):
+    f.write("----------EXECUTION: " + str(i))
+    start_time = time.time()
+    sol = greedy(data, r_matrix, 3, 10*i)
+    time_sol = time.time() - start_time
+    f.write("TIME: " + str(time_sol))
+    print("SOL: " + str(sol) + "\n")
+    obj = str(objective(sol, data, 3, r_list, compute_lambda(data, r_list)))
+    print("OBJ_RATE: " + obj + "\n")
+    f.write("OBJ_RATE: " + obj + "\n")
+    c_rate = c(sol, data, 3)
+    inf_rate = infeasibility_total(sol, r_list)
+    print("C_RATE: " + str(c_rate) + "\n")
+    f.write("C_RATE: " + str(c_rate) + "\n")
+    print("INF_RATE: " + str(inf_rate) + "\n")
+    f.write("INF_RATE: " + str(inf_rate) + "\n")
