@@ -167,6 +167,7 @@ def simulated_annealing(data, k, r_list, mu, final_temperature):
             new_sol = generate_neighbour(sol, n, k)
             obj_new = objective(new_sol, data, k, r_list, l)
             evaluations = evaluations + 1
+            # print(evaluations)
             vecinos = vecinos + 1
             difference = obj_new - obj_sol
             if difference < 0 or random.random() <= math.exp(-difference/temperature):
@@ -182,32 +183,53 @@ def simulated_annealing(data, k, r_list, mu, final_temperature):
 
 
 
-
-# executions = 5
-# datasets = ["iris", "ecoli", "rand", "newthyroid"]
-# clusters = [3, 8, 3, 3]
-# restrictions = ["10", "20"]
-# dataset = datasets[i]
-# k = clusters[i]
-# random.seed(d*10)
-# Results file
-dataset = "iris"
-r = "10"
-k = 3
-data = read_file("bin/" + dataset + "_set.dat")
-r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
-r_list = build_restrictions_list(r_matrix)
-print("Restriction: ", r)
-start_time = time.time()
-# population = agg(data, r_list, clusters[d], 50, two_points_crossover, 0.7, 0.001)
-# population = age(data, r_list, k, 50, two_points_crossover, 0.001)
 mu = 0.3
 final_temperature = 0.001
-sol = simulated_annealing(data, k, r_list, mu, final_temperature)
-time_sol = time.time() - start_time
-print(str(time_sol))
-print("OBJ_RATE: " + str(sol) + "\n")
-c_rate = c(sol, data, k)
-inf_rate = infeasibility_total(sol, r_list)
-print("C_RATE: " + str(c_rate) + "\n")
-print("INF_RATE: " + str(inf_rate) + "\n")
+
+executions = 5
+datasets = ["iris", "ecoli", "rand", "newthyroid"]
+clusters = [3, 8, 3, 3]
+restrictions = ["10", "20"]
+
+
+def run_in_parallel(d):
+    for i in range(4):
+        dataset = datasets[i]
+        k = clusters[i]
+        random.seed(d*10)
+        # Results file
+        f = open("simulated_annealing_" + dataset + '_' + str(d) + ".txt", "w")
+        data = read_file("bin/" + dataset + "_set.dat")
+        f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
+        f.write("SEED: " + str(d*10))
+        for r in restrictions:
+            r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+            r_list = build_restrictions_list(r_matrix)
+            f.write("\n\n--------> Restriction: " + r + "\n")
+            print("Restriction: ", r)
+            start_time = time.time()
+            sol = simulated_annealing(data, k, r_list, mu, final_temperature)
+            time_sol = time.time() - start_time
+            print(str(time_sol))
+            f.write("TIME: " + str(time_sol) + "\n\n")
+            obj_rate = objective(sol, data, k, r_list, compute_lambda(data, r_list))
+            print("OBJ_RATE: " + str(obj_rate) + "\n")
+            f.write("OBJ_RATE: " + str(obj_rate) + "\n")
+            c_rate = c(sol, data, k)
+            inf_rate = infeasibility_total(sol, r_list)
+            f.write("C_RATE: " + str(c_rate) + "\n")
+            print("C_RATE: " + str(c_rate) + "\n")
+            print("INF_RATE: " + str(inf_rate) + "\n")
+            f.write("INF_RATE: " + str(inf_rate) + "\n")
+
+
+from multiprocessing import Pool
+
+argument = [0,1,2,3,4]
+
+
+if __name__ == '__main__':
+    pool = Pool()
+    pool.map(run_in_parallel, argument)
+    pool.close()
+    pool.join()
