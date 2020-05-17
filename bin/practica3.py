@@ -177,11 +177,84 @@ def simulated_annealing(data, k, r_list, mu, final_temperature):
                     best_sol = copy.deepcopy(sol)
                     obj_best = copy.deepcopy(obj_sol)
                     exitos = exitos + 1
-                    print(obj_best)
         temperature = cooling(temperature, beta)
     return best_sol
 
 
+
+
+'''
+Generate neighbour from sol changing values from to_change
+'''
+
+
+def generate_neighbour_local_search(sol, to_change):
+    neighbour = np.copy(sol)
+    neighbour[to_change[0]]=to_change[1]
+    return neighbour
+
+
+'''
+Local search algorithm
+'''
+
+def generate_virtual_neighbourhood (n, k, sol):
+    neighbourhood = [[i, c] for c in range(k) for i in range(n) if sol[i] != c]
+    random.shuffle(neighbourhood)
+    return np.array(neighbourhood)
+
+
+def local_search(data, r_list, k):
+    n = len(data)
+    l = compute_lambda(data, r_list)
+    sol = initial_solution(k, n)
+    evaluations = 0
+    i = 0
+    neighbourhood = generate_virtual_neighbourhood(n, k, sol)
+    objective_sol = objective(sol, data, k, r_list, l)
+    while evaluations<100000 and i<len(neighbourhood):
+        neighbour = generate_neighbour_local_search(sol, neighbourhood[i])
+        i += 1
+        # If it is a feasible neighbour
+        if len(np.unique(neighbour)) == k:
+            objective_neighbour = objective(neighbour, data, k, r_list, l)
+            evaluations += 1
+            # first neighbour that improves actual solution
+            if objective_neighbour < objective_sol:
+                sol = copy.deepcopy(neighbour)
+                objective_sol = copy.deepcopy(objective_neighbour)
+                neighbourhood = generate_virtual_neighbourhood(n, k, sol)
+                i = 0
+    return sol, objective_sol
+
+
+
+'''
+Búsqueda local Multiarranque
+'''
+
+def bmb(data, r_list, k):
+    solutions = np.array([local_search(data, r_list, k) for i in range(10)])
+    return solutions[np.argmin(solutions[:,1])][0]
+
+
+
+
+# data = read_file("bin/" + "iris" + "_set.dat")
+# r_matrix = read_file("bin/" + "iris" + "_set_const_" + "10" + ".const")
+# r_list = build_restrictions_list(r_matrix)
+# start_time = time.time()
+# sol = bmb(data, r_list, 3)
+# time_sol = time.time() - start_time
+# print(str(time_sol))
+# obj_rate = objective(sol, data, 3, r_list, compute_lambda(data, r_list))
+# print("OBJ_RATE: " + str(obj_rate) + "\n")
+# c_rate = c(sol, data, 3)
+# inf_rate = infeasibility_total(sol, r_list)
+# print("C_RATE: " + str(c_rate) + "\n")
+# print("INF_RATE: " + str(inf_rate) + "\n")
+#
+#
 
 mu = 0.3
 final_temperature = 0.001
@@ -198,7 +271,7 @@ def run_in_parallel(d):
         k = clusters[i]
         random.seed(d*10)
         # Results file
-        f = open("simulated_annealing_" + dataset + '_' + str(d) + ".txt", "w")
+        f = open("bmb_" + dataset + '_' + str(d) + ".txt", "w")
         data = read_file("bin/" + dataset + "_set.dat")
         f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
         f.write("SEED: " + str(d*10))
@@ -208,7 +281,8 @@ def run_in_parallel(d):
             f.write("\n\n--------> Restriction: " + r + "\n")
             print("Restriction: ", r)
             start_time = time.time()
-            sol = simulated_annealing(data, k, r_list, mu, final_temperature)
+            # sol = simulated_annealing(data, k, r_list, mu, final_temperature)
+            sol = bmb(data, r_list, k)
             time_sol = time.time() - start_time
             print(str(time_sol))
             f.write("TIME: " + str(time_sol) + "\n\n")
