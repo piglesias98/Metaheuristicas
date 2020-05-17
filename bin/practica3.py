@@ -204,10 +204,11 @@ def generate_virtual_neighbourhood (n, k, sol):
     return np.array(neighbourhood)
 
 
-def local_search(data, r_list, k):
+def local_search(data, r_list, k, sol=False):
     n = len(data)
     l = compute_lambda(data, r_list)
-    sol = initial_solution(k, n)
+    if not sol:
+        sol = initial_solution(k, n)
     evaluations = 0
     i = 0
     neighbourhood = generate_virtual_neighbourhood(n, k, sol)
@@ -236,6 +237,69 @@ Búsqueda local Multiarranque
 def bmb(data, r_list, k):
     solutions = np.array([local_search(data, r_list, k) for i in range(10)])
     return solutions[np.argmin(solutions[:,1])][0]
+
+
+def mutation(sol, n):
+    #Copiamos toda la solución completa
+    result = copy.deepcopy(sol)
+    # Inicio del segmento
+    r = random.randint(0, n-1)
+    # Tamaño del segmento
+    v = random.randint(0, n-1)
+    # Los índices que realizarán se copiarán del padre serán
+    segment = np.arange(r, r+v) % n
+    # Para el segmento realizamos la mutación
+    result[segment] =
+    # Por lo tanto los que realizan cruce uniforme
+    uniform = np.ones(len(individual_1), dtype=bool)
+    uniform[two_points] = False
+    # Copiamos primero el padre
+    child = copy.deepcopy(individual_1)
+    # Realizamos el cruce uniforme con los que caen fuera del intervalo
+    child[uniform] = uniform_crossover(individual_1[uniform], individual_2[uniform], n)
+    return child
+
+
+'''
+ILS
+'''
+
+def ils(data, r_list, k):
+    n = len(data)
+    sol0 = initial_solution(k, n)
+    sol = local_search(data, k, n, sol0)
+    evaluations = 0
+    while evaluations<100000:
+
+
+
+def mutar(to_change, solution, k):
+    print("dentro de mutar")
+    sol = copy.deepcopy(solution)
+    # El valor será uno distinto al actual
+    cluster = random.randint(0, k - 1)
+    print("cluster", cluster)
+    old_cluster = sol[to_change]
+    sol[to_change] = cluster
+    # Nos aseguramos de que sea una solución factible
+    while len(np.unique(sol)) != k or old_cluster == cluster:
+        sol[to_change] = old_cluster
+        old_cluster = sol[to_change]
+        cluster = random.randint(0, k - 1)
+        print("cluster", cluster)
+        sol[to_change] = cluster
+    print("fuera de mutar")
+    return cluster
+
+sol = np.array([1, 1, 2, 3, 3, 3, 2, 2])
+segmento = [0, 1, 6, 7]
+for i in range(len(segmento)):
+    print("INICIAL", sol[segmento][i])
+    a_mutar = mutar(sol[segmento][i], sol, 3)
+    print("A MUTAR", a_mutar)
+    sol[segmento][i] = a_mutar
+
+print(sol)
 
 
 
