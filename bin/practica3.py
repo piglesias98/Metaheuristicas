@@ -107,6 +107,9 @@ def objective(sol, data, k, r_list, l):
     obj = c(sol, data, k) + infeasibility_total(sol, r_list) * l
     return obj
 
+'''
+SIMULATED ANNEALING
+'''
 
 def initial_temperature(mu, cost):
     return (mu*cost)/(-np.log(mu))
@@ -115,7 +118,6 @@ def initial_temperature(mu, cost):
 '''
 Generate neighbour from sol changing values from to_change
 '''
-
 
 def generate_neighbour(solution, n, k):
     sol = copy.deepcopy(solution)
@@ -143,11 +145,12 @@ def cooling(temperature, beta):
     return temperature/(1+beta*temperature)
 
 
-def simulated_annealing(data, k, r_list, mu, final_temperature):
+def simulated_annealing(data, k, r_list, mu, final_temperature, sol=None):
     l = compute_lambda(data, r_list)
     n = len(data)
     # Initial solution
-    sol = initial_solution(k, n)
+    if sol is None:
+        sol = initial_solution(k, n)
     obj_sol = objective(sol, data, k, r_list, l)
     evaluations = 1
     best_sol = copy.deepcopy(sol)
@@ -239,6 +242,12 @@ def bmb(data, r_list, k):
     return solutions[np.argmin(solutions[:,1])][0]
 
 
+
+
+'''
+ILS
+'''
+
 def reparation(sol, n, k):
     # Comprobamos que cada cluster esté en el hijo
     for cluster in range(k):
@@ -264,21 +273,29 @@ def mutation(sol, n, k):
     return sol
 
 
-'''
-ILS
-'''
 
 def ils(data, r_list, k):
     n = len(data)
     sol0 = initial_solution(k, n)
     sol, obj_sol = local_search(data, r_list, k, sol0)
     for i in range(9):
+        print(i)
         sol1 = mutation(sol, n, k)
         sol2, obj_sol2 = local_search(data, r_list, k, sol1)
         sol = sol if obj_sol<obj_sol2 else copy.deepcopy(sol2)
     return sol
 
 
+def ils_es(data, r_list, k, mu, final_temperature):
+    n = len(data)
+    sol0 = initial_solution(k, n)
+    sol, obj_sol = simulated_annealing(data, k, r_list, mu, final_temperature, sol0)
+    for i in range(9):
+        print(i)
+        sol1 = mutation(sol, n, k)
+        sol2, obj_sol2 = simulated_annealing(data, k, r_list, mu, final_temperature, sol1)
+        sol = sol if obj_sol<obj_sol2 else copy.deepcopy(sol2)
+    return sol
 
 
 
