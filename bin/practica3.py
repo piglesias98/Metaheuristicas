@@ -204,10 +204,10 @@ def generate_virtual_neighbourhood (n, k, sol):
     return np.array(neighbourhood)
 
 
-def local_search(data, r_list, k, sol=False):
+def local_search(data, r_list, k, sol=None):
     n = len(data)
     l = compute_lambda(data, r_list)
-    if not sol:
+    if sol is None:
         sol = initial_solution(k, n)
     evaluations = 0
     i = 0
@@ -239,25 +239,29 @@ def bmb(data, r_list, k):
     return solutions[np.argmin(solutions[:,1])][0]
 
 
-def mutation(sol, n):
-    #Copiamos toda la solución completa
-    result = copy.deepcopy(sol)
+def reparation(sol, n, k):
+    # Comprobamos que cada cluster esté en el hijo
+    for cluster in range(k):
+        if cluster not in sol:
+            # Si no se encuentra seleccionamos un elemento
+            # aleatorio y lo asignamos a ese cluster
+            sol[random.randint(0, n - 1)] = cluster
+    return sol
+
+
+def mutation(sol, n, k):
     # Inicio del segmento
     r = random.randint(0, n-1)
     # Tamaño del segmento
-    v = random.randint(0, n-1)
+    v = int(0.1 * n)
     # Los índices que realizarán se copiarán del padre serán
     segment = np.arange(r, r+v) % n
     # Para el segmento realizamos la mutación
-    result[segment] =
-    # Por lo tanto los que realizan cruce uniforme
-    uniform = np.ones(len(individual_1), dtype=bool)
-    uniform[two_points] = False
-    # Copiamos primero el padre
-    child = copy.deepcopy(individual_1)
-    # Realizamos el cruce uniforme con los que caen fuera del intervalo
-    child[uniform] = uniform_crossover(individual_1[uniform], individual_2[uniform], n)
-    return child
+    sol[segment] = [random.randint(0, k - 1) for i in segment]
+    # Comprobar factibilidad
+    if len(np.unique(sol)) != k:
+        sol[segment] = reparation(sol[segment], len(segment), k)
+    return sol
 
 
 '''
@@ -267,107 +271,83 @@ ILS
 def ils(data, r_list, k):
     n = len(data)
     sol0 = initial_solution(k, n)
-    sol = local_search(data, k, n, sol0)
-    evaluations = 0
-    while evaluations<100000:
-
-
-
-def mutar(to_change, solution, k):
-    print("dentro de mutar")
-    sol = copy.deepcopy(solution)
-    # El valor será uno distinto al actual
-    cluster = random.randint(0, k - 1)
-    print("cluster", cluster)
-    old_cluster = sol[to_change]
-    sol[to_change] = cluster
-    # Nos aseguramos de que sea una solución factible
-    while len(np.unique(sol)) != k or old_cluster == cluster:
-        sol[to_change] = old_cluster
-        old_cluster = sol[to_change]
-        cluster = random.randint(0, k - 1)
-        print("cluster", cluster)
-        sol[to_change] = cluster
-    print("fuera de mutar")
-    return cluster
-
-sol = np.array([1, 1, 2, 3, 3, 3, 2, 2])
-segmento = [0, 1, 6, 7]
-for i in range(len(segmento)):
-    print("INICIAL", sol[segmento][i])
-    a_mutar = mutar(sol[segmento][i], sol, 3)
-    print("A MUTAR", a_mutar)
-    sol[segmento][i] = a_mutar
-
-print(sol)
+    sol, obj_sol = local_search(data, r_list, k, sol0)
+    for i in range(9):
+        sol1 = mutation(sol, n, k)
+        sol2, obj_sol2 = local_search(data, r_list, k, sol1)
+        sol = sol if obj_sol<obj_sol2 else copy.deepcopy(sol2)
+    return sol
 
 
 
 
-# data = read_file("bin/" + "iris" + "_set.dat")
-# r_matrix = read_file("bin/" + "iris" + "_set_const_" + "10" + ".const")
-# r_list = build_restrictions_list(r_matrix)
-# start_time = time.time()
-# sol = bmb(data, r_list, 3)
-# time_sol = time.time() - start_time
-# print(str(time_sol))
-# obj_rate = objective(sol, data, 3, r_list, compute_lambda(data, r_list))
-# print("OBJ_RATE: " + str(obj_rate) + "\n")
-# c_rate = c(sol, data, 3)
-# inf_rate = infeasibility_total(sol, r_list)
-# print("C_RATE: " + str(c_rate) + "\n")
-# print("INF_RATE: " + str(inf_rate) + "\n")
+
+data = read_file("bin/" + "ecoli" + "_set.dat")
+r_matrix = read_file("bin/" + "ecoli" + "_set_const_" + "10" + ".const")
+r_list = build_restrictions_list(r_matrix)
+start_time = time.time()
+sol = ils(data, r_list, 8)
+time_sol = time.time() - start_time
+print(str(time_sol))
+obj_rate = objective(sol, data, 8, r_list, compute_lambda(data, r_list))
+print("OBJ_RATE: " + str(obj_rate) + "\n")
+c_rate = c(sol, data, 8)
+inf_rate = infeasibility_total(sol, r_list)
+print("C_RATE: " + str(c_rate) + "\n")
+print("INF_RATE: " + str(inf_rate) + "\n")
+# #
+# #
+#
+# mu = 0.3
+# final_temperature = 0.001
+#
+# executions = 5
+# datasets = ["iris", "ecoli", "rand", "newthyroid"]
+# clusters = [3, 8, 3, 3]
+# restrictions = ["10", "20"]
 #
 #
-
-mu = 0.3
-final_temperature = 0.001
-
-executions = 5
-datasets = ["iris", "ecoli", "rand", "newthyroid"]
-clusters = [3, 8, 3, 3]
-restrictions = ["10", "20"]
-
-
-def run_in_parallel(d):
-    for i in range(4):
-        dataset = datasets[i]
-        k = clusters[i]
-        random.seed(d*10)
-        # Results file
-        f = open("bmb_" + dataset + '_' + str(d) + ".txt", "w")
-        data = read_file("bin/" + dataset + "_set.dat")
-        f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
-        f.write("SEED: " + str(d*10))
-        for r in restrictions:
-            r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
-            r_list = build_restrictions_list(r_matrix)
-            f.write("\n\n--------> Restriction: " + r + "\n")
-            print("Restriction: ", r)
-            start_time = time.time()
-            # sol = simulated_annealing(data, k, r_list, mu, final_temperature)
-            sol = bmb(data, r_list, k)
-            time_sol = time.time() - start_time
-            print(str(time_sol))
-            f.write("TIME: " + str(time_sol) + "\n\n")
-            obj_rate = objective(sol, data, k, r_list, compute_lambda(data, r_list))
-            print("OBJ_RATE: " + str(obj_rate) + "\n")
-            f.write("OBJ_RATE: " + str(obj_rate) + "\n")
-            c_rate = c(sol, data, k)
-            inf_rate = infeasibility_total(sol, r_list)
-            f.write("C_RATE: " + str(c_rate) + "\n")
-            print("C_RATE: " + str(c_rate) + "\n")
-            print("INF_RATE: " + str(inf_rate) + "\n")
-            f.write("INF_RATE: " + str(inf_rate) + "\n")
-
-
-from multiprocessing import Pool
-
-argument = [0,1,2,3,4]
-
-
-if __name__ == '__main__':
-    pool = Pool()
-    pool.map(run_in_parallel, argument)
-    pool.close()
-    pool.join()
+# def run_in_parallel(d):
+#     for i in range(4):
+#         dataset = datasets[i]
+#         k = clusters[i]
+#         random.seed(d*10)
+#         # Results file
+#         f = open("bmb_" + dataset + '_' + str(d) + ".txt", "w")
+#         data = read_file("bin/" + dataset + "_set.dat")
+#         f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
+#         f.write("SEED: " + str(d*10))
+#         for r in restrictions:
+#             r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+#             r_list = build_restrictions_list(r_matrix)
+#             f.write("\n\n--------> Restriction: " + r + "\n")
+#             print("Restriction: ", r)
+#             start_time = time.time()
+#             # sol = simulated_annealing(data, k, r_list, mu, final_temperature)
+#             sol = bmb(data, r_list, k)
+#             time_sol = time.time() - start_time
+#             print(str(time_sol))
+#             f.write("TIME: " + str(time_sol) + "\n\n")
+#             obj_rate = objective(sol, data, k, r_list, compute_lambda(data, r_list))
+#             print("OBJ_RATE: " + str(obj_rate) + "\n")
+#             f.write("OBJ_RATE: " + str(obj_rate) + "\n")
+#             c_rate = c(sol, data, k)
+#             inf_rate = infeasibility_total(sol, r_list)
+#             f.write("C_RATE: " + str(c_rate) + "\n")
+#             print("C_RATE: " + str(c_rate) + "\n")
+#             print("INF_RATE: " + str(inf_rate) + "\n")
+#             f.write("INF_RATE: " + str(inf_rate) + "\n")
+#
+#
+# from multiprocessing import Pool
+#
+# argument = [0,1,2,3,4]
+#
+#
+# if __name__ == '__main__':
+#     pool = Pool()
+#     pool.map(run_in_parallel, argument)
+#     pool.close()
+#     pool.join()
+#
+#
