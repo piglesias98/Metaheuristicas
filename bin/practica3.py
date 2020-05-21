@@ -149,7 +149,7 @@ def cooling_geometric(temperature):
     return temperature*0.9
 
 
-def simulated_annealing(data, k, r_list, mu, final_temperature, sol=None):
+def simulated_annealing(data, k, r_list, mu, final_temperature, sol=None, f=None):
     l = compute_lambda(data, r_list)
     n = len(data)
     # Initial solution
@@ -167,7 +167,6 @@ def simulated_annealing(data, k, r_list, mu, final_temperature, sol=None):
     # Cooling
     m = 100000/max_vecinos
     beta = compute_beta(temperature, final_temperature, m)
-    temperatures = [temperature]
     while temperature > final_temperature and evaluations < 100000:
         vecinos = 0
         exitos = 0
@@ -184,11 +183,15 @@ def simulated_annealing(data, k, r_list, mu, final_temperature, sol=None):
                 if obj_sol < obj_best:
                     best_sol = copy.deepcopy(sol)
                     obj_best = copy.deepcopy(obj_sol)
+                    f.write(str(obj_best) + "\n")
+                    print(obj_best)
                     print(obj_best)
                     exitos = exitos + 1
-        temperature = cooling_geometric(temperature)
-        temperatures.append(temperature)
-    return best_sol, obj_best, temperatures
+        parada = (evaluations,vecinos,exitos,temperature,obj_best)
+        print(parada)
+        f.write(str(parada) + "\n")
+        temperature = cooling(temperature, beta)
+    return best_sol, obj_best
 
 
 
@@ -318,35 +321,30 @@ clusters = [3, 8, 3, 3]
 restrictions = ["10", "20"]
 
 dataset= "ecoli"
-k =8
-f = open("convergencia_geometrico.txt", "w")
+k = 8
+f = open("convergencia_geometrico_ecoli_10.txt", "w")
 data = read_file("bin/" + dataset + "_set.dat")
 f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
-for r in restrictions:
-    r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
-    r_list = build_restrictions_list(r_matrix)
-    f.write("\n\n--------> Restriction: " + r + "\n")
-    print("Restriction: ", r)
-    start_time = time.time()
-    sol, obj, temperatures = simulated_annealing(data, k, r_list, mu, final_temperature)
-    # sol = ils(data, r_list, k)
-    time_sol = time.time() - start_time
-    print(str(time_sol))
-    f.write("TIME: " + str(time_sol) + "\n\n")
-    obj_rate = objective(sol, data, k, r_list, compute_lambda(data, r_list))
-    print("OBJ_RATE: " + str(obj_rate) + "\n")
-    f.write("OBJ_RATE: " + str(obj_rate) + "\n")
-    c_rate = c(sol, data, k)
-    inf_rate = infeasibility_total(sol, r_list)
-    f.write("C_RATE: " + str(c_rate) + "\n")
-    print("C_RATE: " + str(c_rate) + "\n")
-    print("INF_RATE: " + str(inf_rate) + "\n")
-    f.write("INF_RATE: " + str(inf_rate) + "\n")
-    print("TEMPERATURES")
-    f.write("TEMPERATURES" + "\n")
-    for i in temperatures:
-        print("--", i)
-        f.write("--", str(i))
+r = "10"
+r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+r_list = build_restrictions_list(r_matrix)
+f.write("\n\n--------> Restriction: " + r + "\n")
+print("Restriction: ", r)
+start_time = time.time()
+sol, obj = simulated_annealing(data, k, r_list, mu, final_temperature, sol = None, f =f)
+# sol = ils(data, r_list, k)
+time_sol = time.time() - start_time
+print(str(time_sol))
+f.write("TIME: " + str(time_sol) + "\n\n")
+obj_rate = objective(sol, data, k, r_list, compute_lambda(data, r_list))
+print("OBJ_RATE: " + str(obj_rate) + "\n")
+f.write("OBJ_RATE: " + str(obj_rate) + "\n")
+c_rate = c(sol, data, k)
+inf_rate = infeasibility_total(sol, r_list)
+f.write("C_RATE: " + str(c_rate) + "\n")
+print("C_RATE: " + str(c_rate) + "\n")
+print("INF_RATE: " + str(inf_rate) + "\n")
+f.write("INF_RATE: " + str(inf_rate) + "\n")
 
 # def run_in_parallel(d):
 #     for i in range(3):
@@ -354,7 +352,7 @@ for r in restrictions:
 #         k = clusters[d]
 #         random.seed(i*10)
 #         # Results file
-#         f = open("ils_es_" + dataset + '_' + str(i) + ".txt", "w")
+#         f = open("ils_es_max_vecinos_05_" + dataset + '_' + str(i) + ".txt", "w")
 #         data = read_file("bin/" + dataset + "_set.dat")
 #         f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
 #         f.write("SEED: " + str(i*10))
@@ -364,8 +362,8 @@ for r in restrictions:
 #             f.write("\n\n--------> Restriction: " + r + "\n")
 #             print("Restriction: ", r)
 #             start_time = time.time()
-#             sol = simulated_annealing(data, k, r_list, mu, final_temperature)
-#             # sol = ils(data, r_list, k)
+#             # sol = simulated_annealing(data, k, r_list, mu, final_temperature)
+#             sol = ils_es(data, r_list, k, mu, final_temperature)
 #             time_sol = time.time() - start_time
 #             print(str(time_sol))
 #             f.write("TIME: " + str(time_sol) + "\n\n")
@@ -390,4 +388,4 @@ for r in restrictions:
 #     pool.map(run_in_parallel, argument)
 #     pool.close()
 #     pool.join()
-#
+
