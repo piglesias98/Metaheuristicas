@@ -183,14 +183,10 @@ def simulated_annealing(data, k, r_list, mu, final_temperature, sol=None, f=None
                 if obj_sol < obj_best:
                     best_sol = copy.deepcopy(sol)
                     obj_best = copy.deepcopy(obj_sol)
-                    f.write(str(obj_best) + "\n")
-                    print(obj_best)
-                    print(obj_best)
                     exitos = exitos + 1
-        parada = (evaluations,vecinos,exitos,temperature,obj_best)
-        print(parada)
-        f.write(str(parada) + "\n")
-        temperature = cooling(temperature, beta)
+        f.write(str(evaluations) + "," + str(vecinos) + "," + str(exitos) + "," + str(temperature) + "," + str(obj_best) + "\n")
+        print(str(evaluations) + "," + str(vecinos) + "," + str(exitos) + "," + str(temperature) + "," + str(obj_best))
+        temperature = cooling_geometric(temperature)
     return best_sol, obj_best
 
 
