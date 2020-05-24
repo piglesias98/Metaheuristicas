@@ -141,6 +141,14 @@ def compute_beta(initial_temperature, final_temperature, m):
     return (initial_temperature-final_temperature)/(m * initial_temperature * final_temperature)
 
 
+'''
+
+Enfriamiento simulado
+
+'''
+
+
+
 def cooling(temperature, beta):
     return temperature/(1+beta*temperature)
 
@@ -150,43 +158,58 @@ def cooling_geometric(temperature):
 
 
 def simulated_annealing(data, k, r_list, mu, final_temperature, sol=None, f=None):
+    # Calculamos lambda ya que no varía en
     l = compute_lambda(data, r_list)
     n = len(data)
-    # Initial solution
+    # La solución inicial la generamos de forma aleatoria
     if sol is None:
         sol = initial_solution(k, n)
     obj_sol = objective(sol, data, k, r_list, l)
+    # Inicializamos a 1 el número de evaluaciones
     evaluations = 1
+    # Inicializamos la mejor solución
     best_sol = copy.deepcopy(sol)
     obj_best = copy.deepcopy(obj_sol)
-    # Initial temperature
+    # Calculamos la temperatura inicial en función de mu y phi
     temperature = initial_temperature(mu, obj_sol)
-    # L(T)
+    # L(T) Inicializamos las condiciones de parada del bucle interno
     max_vecinos = 10 * n
     max_exitos = 0.1 * max_vecinos
-    # Cooling
+    # Calculamos beta para el enfriamiento de Cauchy ya que no varía en
     m = 100000/max_vecinos
     beta = compute_beta(temperature, final_temperature, m)
-    while temperature > final_temperature and evaluations < 100000:
+    # Bucle externo: mientras no se supere el número de evaluaciones
+    # y la temperatura sea menor que la temperatura final
+    while temperature > final_temperature and evaluations < 10000:
         vecinos = 0
         exitos = 0
+        # Bucle interno: condiciones L(T)
         while vecinos<max_vecinos and exitos<max_exitos:
+            # Generamos un vecino de forma aleatoria con el operador de vecino
             new_sol = generate_neighbour(sol, n, k)
             obj_new = objective(new_sol, data, k, r_list, l)
+            # Aumentamos el número de evaluaciones
             evaluations = evaluations + 1
-            # print(evaluations)
+            # Aumentamos el número de vecinos generados
             vecinos = vecinos + 1
+            # Calculamos la diferencia de función objetivo
             difference = obj_new - obj_sol
+            # Si la diferencia es negativa o el número aleatorio menor que la expresión e^(-diferencia/temperatura)
             if difference < 0 or random.random() <= math.exp(-difference/temperature):
+                # Actualizamos la solución actual
                 sol = copy.deepcopy(new_sol)
                 obj_sol = copy.deepcopy(obj_new)
+                # Aumentamos el número de éxitos
+                exitos = exitos + 1
                 if obj_sol < obj_best:
+                    # Si es mejor que la mejor solución, ésta se actualiza
                     best_sol = copy.deepcopy(sol)
                     obj_best = copy.deepcopy(obj_sol)
-                    exitos = exitos + 1
         f.write(str(evaluations) + "," + str(vecinos) + "," + str(exitos) + "," + str(temperature) + "," + str(obj_best) + "\n")
         print(str(evaluations) + "," + str(vecinos) + "," + str(exitos) + "," + str(temperature) + "," + str(obj_best))
+        # Enfriamos la temperatura con el esquema de enfriamiento
         temperature = cooling_geometric(temperature)
+        # temperature = cooling(temperature, beta)
     return best_sol, obj_best
 
 
@@ -214,6 +237,8 @@ def generate_virtual_neighbourhood (n, k, sol):
 
 
 def local_search(data, r_list, k, sol=None):
+    print("Búsqueda local")
+    # n será la longitud de los datos
     n = len(data)
     l = compute_lambda(data, r_list)
     if sol is None:
@@ -222,7 +247,7 @@ def local_search(data, r_list, k, sol=None):
     i = 0
     neighbourhood = generate_virtual_neighbourhood(n, k, sol)
     objective_sol = objective(sol, data, k, r_list, l)
-    while evaluations<100000 and i<len(neighbourhood):
+    while evaluations<10000 and i<len(neighbourhood):
         neighbour = generate_neighbour_local_search(sol, neighbourhood[i])
         i += 1
         # If it is a feasible neighbour
@@ -233,7 +258,7 @@ def local_search(data, r_list, k, sol=None):
             if objective_neighbour < objective_sol:
                 sol = copy.deepcopy(neighbour)
                 objective_sol = copy.deepcopy(objective_neighbour)
-                print("OBJ", objective_sol)
+                # print("OBJ", objective_sol)
                 neighbourhood = generate_virtual_neighbourhood(n, k, sol)
                 i = 0
     return sol, objective_sol
@@ -245,7 +270,9 @@ Búsqueda local Multiarranque
 '''
 
 def bmb(data, r_list, k):
+    # Se genera un array con los resultados de 10 ejecuciones de búsqueda local
     solutions = np.array([local_search(data, r_list, k) for i in range(10)])
+    # Se devuelve la solución con la mejor función objetivo
     return solutions[np.argmin(solutions[:,1])][0]
 
 
@@ -270,30 +297,45 @@ def mutation(sol, n, k):
     r = random.randint(0, n-1)
     # Tamaño del segmento
     v = int(0.1 * n)
-    # Los índices que realizarán se copiarán del padre serán
+    # Calculamos el segmento
     segment = np.arange(r, r+v) % n
     # Para el segmento realizamos la mutación
     sol[segment] = [random.randint(0, k - 1) for i in segment]
     # Comprobar factibilidad
     if len(np.unique(sol)) != k:
+        # Si no es factible se realiza una reparación en el segmento,
+        # para conservar la aleatoriedad
         sol[segment] = reparation(sol[segment], len(segment), k)
     return sol
 
 
 
-def ils(data, r_list, k):
+def ils(data, r_list, k, f):
     n = len(data)
+    # Generamos la solución inicial de manera aleatoria
     sol0 = initial_solution(k, n)
+    # Aplicamos la búsqueda local
     sol, obj_sol = local_search(data, r_list, k, sol0)
+    # En total realizaremos 100000 evaluaciones, 10000 cada vez
     for i in range(9):
         print("--------------------------", i)
+        # Aplicamos el operador de mutación
         sol1 = mutation(sol, n, k)
+        # Aplicamos la búsqueda local
         sol2, obj_sol2 = local_search(data, r_list, k, sol1)
-        sol = sol if obj_sol<obj_sol2 else copy.deepcopy(sol2)
+        # Nos quedamos con la mejor solución
+        if obj_sol2 < obj_sol:
+            print("Mejora")
+            sol = copy.deepcopy(sol2)
+            f.write(str(obj_sol2)+ " Mejora " + "\n")
+        else:
+            f.write(str(obj_sol) + " No Mejora " + "\n")
+            print('No mejora')
+        # sol = sol if obj_sol<obj_sol2 else copy.deepcopy(sol2)
     return sol
 
 
-def ils_es(data, r_list, k, mu, final_temperature):
+def ils_es(data, r_list, k, mu, final_temperature, f):
     n = len(data)
     sol0 = initial_solution(k, n)
     sol, obj_sol = simulated_annealing(data, k, r_list, mu, final_temperature, sol0)
@@ -301,7 +343,14 @@ def ils_es(data, r_list, k, mu, final_temperature):
         print(i)
         sol1 = mutation(sol, n, k)
         sol2, obj_sol2 = simulated_annealing(data, k, r_list, mu, final_temperature, sol1)
-        sol = sol if obj_sol<obj_sol2 else copy.deepcopy(sol2)
+        if obj_sol2 < obj_sol:
+            print("Mejora")
+            sol = copy.deepcopy(sol2)
+            f.write(str(obj_sol2)+ " Mejora " + "\n")
+        else:
+            f.write(str(obj_sol) + " No Mejora " + "\n")
+            print('No mejora')
+        # sol = sol if obj_sol<obj_sol2 else copy.deepcopy(sol2)
     return sol
 
 
@@ -316,9 +365,10 @@ datasets = ["iris", "ecoli", "rand", "newthyroid"]
 clusters = [3, 8, 3, 3]
 restrictions = ["10", "20"]
 
+
 dataset= "ecoli"
 k = 8
-f = open("convergencia_geometrico_ecoli_10.txt", "w")
+f = open("convergencia_simulated_annealing_geometric_updated_10.txt", "w")
 data = read_file("bin/" + dataset + "_set.dat")
 f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
 r = "10"
@@ -328,7 +378,7 @@ f.write("\n\n--------> Restriction: " + r + "\n")
 print("Restriction: ", r)
 start_time = time.time()
 sol, obj = simulated_annealing(data, k, r_list, mu, final_temperature, sol = None, f =f)
-# sol = ils(data, r_list, k)
+# sol = ils(data, r_list, k, f)
 time_sol = time.time() - start_time
 print(str(time_sol))
 f.write("TIME: " + str(time_sol) + "\n\n")
@@ -348,7 +398,7 @@ f.write("INF_RATE: " + str(inf_rate) + "\n")
 #         k = clusters[d]
 #         random.seed(i*10)
 #         # Results file
-#         f = open("ils_es_max_vecinos_05_" + dataset + '_' + str(i) + ".txt", "w")
+#         f = open("bmb_10mil_" + dataset + '_' + str(i) + ".txt", "w")
 #         data = read_file("bin/" + dataset + "_set.dat")
 #         f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
 #         f.write("SEED: " + str(i*10))
@@ -359,7 +409,8 @@ f.write("INF_RATE: " + str(inf_rate) + "\n")
 #             print("Restriction: ", r)
 #             start_time = time.time()
 #             # sol = simulated_annealing(data, k, r_list, mu, final_temperature)
-#             sol = ils_es(data, r_list, k, mu, final_temperature)
+#             # sol = ils(data, r_list, k)
+#             sol = bmb(data, r_list, k)
 #             time_sol = time.time() - start_time
 #             print(str(time_sol))
 #             f.write("TIME: " + str(time_sol) + "\n\n")
@@ -384,4 +435,4 @@ f.write("INF_RATE: " + str(inf_rate) + "\n")
 #     pool.map(run_in_parallel, argument)
 #     pool.close()
 #     pool.join()
-
+#
