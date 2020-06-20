@@ -37,7 +37,8 @@ Computes global infeasibility for a solution
 
 
 def infeasibility_total(sol, r_list):
-    return np.count_nonzero([ (i[2] == -1 and sol[i[0]] == sol[i[1]]) or (i[2] == 1 and sol[i[0]] != sol[i[1]]) for i in r_list])
+    return np.count_nonzero(
+        [(i[2] == -1 and sol[i[0]] == sol[i[1]]) or (i[2] == 1 and sol[i[0]] != sol[i[1]]) for i in r_list])
 
 
 '''
@@ -50,7 +51,7 @@ def compute_lambda(data, r_list):
     comb = np.array(list(combinations(index_list, 2)))
     d = np.max([distance.euclidean(data[i[0]], data[i[1]]) for i in comb])
     r = len(r_list)
-    return d/r
+    return d / r
 
 
 '''
@@ -58,9 +59,15 @@ Compute c
 '''
 
 
-def c(sol, data, k, centroids):
+def compute_centroids(data, sol, k):
+    return [np.mean(data[np.where(sol == i)]) for i in range(k)]
+
+
+def c(sol, data, k):
+    centroids = compute_centroids(data, sol, k)
     data_cluster = np.array([data[np.where(sol == c)] for c in range(k)])
-    dis_cluster = [[distance.euclidean(data_cluster[c][i], centroids[c]) for i in range(data_cluster[c].shape[0])] for c in range(k)]
+    dis_cluster = [[distance.euclidean(data_cluster[c][i], centroids[c]) for i in range(data_cluster[c].shape[0])] for c
+                   in range(k)]
     intra_cluster_mean_distance = [np.mean(dis_cluster[c]) for c in range(k)]
     general_deviation = np.mean(intra_cluster_mean_distance)
     return general_deviation
@@ -71,11 +78,9 @@ Compute objective function
 '''
 
 
-def objective(sol, data, k, r_list, l, centroids):
-    obj = c(sol, data, k, centroids) + infeasibility_total(sol, r_list) * l
+def objective(sol, data, k, r_list, l):
+    obj = c(sol, data, k) + infeasibility_total(sol, r_list) * l
     return obj
-
-
 
 
 '''
@@ -95,16 +100,36 @@ Get solution from centroids
 
 
 def solution_from_centroids(data, centroids):
-    sol = [np.argmin([distance.euclidean(i, c) for c in centroids]) for i in data]
+    sol = np.array([np.argmin([distance.euclidean(i, c) for c in centroids]) for i in data])
     return sol
 
 
-def initial_fireflies(data, k, n_fireflies, l):
-    initial_centroids = [compute_initial_centroids(data, k) for i in range(len(n_fireflies))]
-    initial_sol = solution_from_centroids(data, initial_centroids)
-    initial_obj = [[initial_sol[i], objective(initial_sol[i], data, k, r_list, l, initial_centroids[i])] for i in range(len(n_fireflies))]
-    fireflies = [[initial_centroids[i], initial_centroids[i], initial_obj[i]] for i in range(len(n_fireflies))]
-    return fireflies
+'''
+Compute initial solution
+'''
+
+
+def compute_initial_solution(data, k):
+    # Calculamos los centroides
+    centroids = compute_initial_centroids(data, k)
+    # Calculamos la solución en base a los centroides
+    sol = solution_from_centroids(data, centroids)
+    # Nos aseguramos de que sea una solución factible
+    while len(np.unique(sol)) != k:
+        # Calculamos los centroides
+        centroids = compute_initial_centroids(data, k)
+        # Calculamos la solución en base a los centroides
+        sol = solution_from_centroids(data, centroids)
+    return centroids, sol, objective(sol, data, k, r_list, l)
+
+
+'''
+Compute initial fireflies
+'''
+
+
+def initial_fireflies(n_fireflies, data, k):
+    return [compute_initial_solution(data, k) for i in range(n_fireflies)]
 
 
 dataset = "iris"
@@ -113,6 +138,5 @@ data = read_file("bin/" + dataset + "_set.dat")
 r = "10"
 r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
 r_list = build_restrictions_list(r_matrix)
-
-
-
+n_fireflies = 20
+l = compute_lambda(data, r_list)
