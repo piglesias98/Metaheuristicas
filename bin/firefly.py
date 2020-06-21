@@ -2,6 +2,7 @@ import numpy as np
 import random
 from scipy.spatial import distance
 from itertools import combinations
+import math
 import time
 import copy
 
@@ -79,7 +80,8 @@ Compute objective function
 
 
 def objective(sol, data, k, r_list, l):
-    obj = c(sol, data, k) + infeasibility_total(sol, r_list) * l
+    obj = c(sol, data, k)
+          # + infeasibility_total(sol, r_list) * l
     return obj
 
 
@@ -132,11 +134,59 @@ def initial_fireflies(n_fireflies, data, k):
     return [compute_initial_solution(data, k) for i in range(n_fireflies)]
 
 
+def movement(move_from, move_to, beta, gamma, data, k, r_list, l):
+    centroid_from = copy.deepcopy(np.array(move_from[0]))
+    centroid_to = copy.deepcopy(np.array(move_to[0]))
+    for c in range(k):
+        r = distance.euclidean(centroid_from[c], centroid_to[c])
+        centroid_from[c] = centroid_from[c] + beta * math.exp(- gamma * r * r) * np.array(centroid_to[c] - centroid_from[c]) + np.random.rand(centroid_from[c].shape[0])
+
+
+    sol = solution_from_centroids(data, centroid_from)
+    # Update solution and light intensity only if it satisfies restrictions
+    if len(np.unique(sol)) == k:
+        move_from[0] = centroid_from
+        move_from[1] = sol
+        move_from[2] = objective(move_from[1], data, k, r_list, l)
+
+    return move_from
+
+
+
+
 dataset = "iris"
 k = 3
 data = read_file("bin/" + dataset + "_set.dat")
 r = "10"
 r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
 r_list = build_restrictions_list(r_matrix)
-n_fireflies = 20
+n_fireflies = 50
 l = compute_lambda(data, r_list)
+
+
+# Inicializar to do
+def fa_v1(data, r_list, k, l, n_fireflies):
+    max_evaluations = 100000
+    beta = 1
+    gamma = 0.25
+    data = data/gamma
+    fireflies = np.array(initial_fireflies(n_fireflies, data, k))
+    evaluations = n_fireflies
+    comb = list(combinations(range(n_fireflies), 2))
+    while evaluations < max_evaluations:
+        random.shuffle(comb)
+        for i in comb:
+           if fireflies[i[0]][2] < fireflies[i[1]][2]:
+                # mover luciérnaga i hacia j
+                # Variar atracción con la distancia via exp(-gamma r)
+                # Evaluar las nuevas soluciones y actualizar la intensidad de la luz
+                fireflies[i[1]] = movement(fireflies[i[1]], fireflies[i[0]], beta, gamma, data, k, r_list, l)
+                evaluations = evaluations + 1
+        print(fireflies[np.argmin(fireflies[:, 2])][2])
+    # Ordenar las luciérnagas y buscar la más luminosa
+    print('          FIIN          ')
+    print(fireflies[np.argmin(fireflies[:, 2])])
+    return fireflies[np.argmin(fireflies[:,2])]
+
+
+f = fa_v1(data, r_list, k, l, n_fireflies)
