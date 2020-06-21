@@ -139,7 +139,8 @@ def movement(move_from, move_to, beta, gamma, data, k, r_list, l):
     centroid_to = copy.deepcopy(np.array(move_to[0]))
     for c in range(k):
         r = distance.euclidean(centroid_from[c], centroid_to[c])
-        centroid_from[c] = centroid_from[c] + beta * math.exp(- gamma * r * r) * np.array(centroid_to[c] - centroid_from[c]) + np.random.rand(centroid_from[c].shape[0])
+        suma = beta * math.exp(- gamma * r * r) * np.array(centroid_to[c] - centroid_from[c]) + np.random.rand(centroid_from[c].shape[0])
+        centroid_from[c] = centroid_from[c] + suma
 
 
     sol = solution_from_centroids(data, centroid_from)
@@ -167,8 +168,9 @@ l = compute_lambda(data, r_list)
 # Inicializar to do
 def fa_v1(data, r_list, k, l, n_fireflies):
     max_evaluations = 100000
-    beta = 1
-    gamma = 0.25
+
+    gamma = 0.38
+    beta = 1/gamma
     data = data/gamma
     fireflies = np.array(initial_fireflies(n_fireflies, data, k))
     evaluations = n_fireflies
