@@ -90,8 +90,11 @@ Compute initial centroids
 
 
 def compute_initial_centroids(data, k):
+    # Calcular máximo de cada dimensión
     max = [np.max([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
+    # Calcular mínimo de cada dimensión
     min = [np.min([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])]
+    # Devolver un vector de números aleatorios en el rango especificado para cada dimensión
     return [[random.uniform(max[i], min[i]) for i in range(data.shape[1])] for j in range(k)]
 
 
@@ -127,30 +130,57 @@ def compute_initial_solution(data, data_normalized, k):
 '''
 Compute initial fireflies
 '''
+def generate_firefly_from_solution(sol, data, data_normalized, k, r_list, l):
+    return compute_centroid_from_solution(data_normalized, sol, k), sol, objective(sol, data, k, r_list, l)
+
+
+
+def compute_centroid_from_solution(data, sol, k):
+    dimensiones = len(data[0])
+    elem_cluster = [data[np.where(sol == i)] for i in range(k)]
+    centroides = [[np.mean(c[:,d]) for d in range(dimensiones)] for c in elem_cluster]
+    return centroides
+
 
 
 def initial_fireflies(n_fireflies, data, data_normalized, k):
     return [compute_initial_solution(data, data_normalized, k) for i in range(n_fireflies)]
 
 
-def movement(move_from, move_to, beta, gamma, data, data_normalized, k, r_list, l):
+def movement(move_from, move_to, beta, gamma, data, data_normalized, k, r_list, l, temperature):
     centroid_from = copy.deepcopy(np.array(move_from[0]))
     centroid_to = copy.deepcopy(np.array(move_to[0]))
     for c in range(k):
         r = distance.euclidean(centroid_from[c], centroid_to[c])
-        suma = beta * math.exp(- gamma * r * r) * np.array(centroid_to[c] - centroid_from[c]) + np.array([random.uniform(-0.05,0.05) for i in range(centroid_from[c].shape[0])])
-        # np.array([random.uniform(-1,1) for i in range(centroid_from[c].shape[0])]) * gamma
+        suma = beta * math.exp(- gamma * r * r) * np.array(centroid_to[c] - centroid_from[c]) + temperature * np.array([random.uniform(-0.1,0.1) for i in range(centroid_from[c].shape[0])])
         centroid_from[c] = centroid_from[c] + suma
 
     sol = solution_from_centroids(data_normalized, centroid_from)
     # Update solution and light intensity only if it satisfies restrictions
     if len(np.unique(sol)) == k:
-        move_from[0] = centroid_from
-        move_from[1] = sol
+        move_from[0] = copy.deepcopy(centroid_from)
+        move_from[1] = copy.deepcopy(sol)
         move_from[2] = objective(move_from[1], data, k, r_list, l)
 
     return move_from
 
+
+def iefa_movement(move_from, move_to, beta, gamma, data, data_normalized, k, r_list, l, temperature)
+    centroid_from = copy.deepcopy(np.array(move_from[0]))
+    centroid_to = copy.deepcopy(np.array(move_to[0]))
+    for c in range(k):
+        r = distance.euclidean(centroid_from[c], centroid_to[c])
+        suma =  np.array([random.uniform(0,1) for i in range(centroid_from[c].shape[0])]) * np.array(centroid_to[c] - centroid_from[c]) + temperature * np.array([random.uniform(-0.1,0.1) for i in range(centroid_from[c].shape[0])])
+        centroid_from[c] = centroid_from[c] + suma
+
+    sol = solution_from_centroids(data_normalized, centroid_from)
+    # Update solution and light intensity only if it satisfies restrictions
+    if len(np.unique(sol)) == k:
+        move_from[0] = copy.deepcopy(centroid_from)
+        move_from[1] = copy.deepcopy(sol)
+        move_from[2] = objective(move_from[1], data, k, r_list, l)
+
+    return move_from
 
 def compute_gamma(data, k):
     mean = np.mean([np.mean([data[i][j] for i in range(data.shape[0])]) for j in range(data.shape[1])])
@@ -170,61 +200,141 @@ def normalize(data):
     return data_normalized
 
 
-dataset = "iris"
-k = 3
-data = read_file("bin/" + dataset + "_set.dat")
-r = "10"
-r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
-r_list = build_restrictions_list(r_matrix)
-n_fireflies = 50
-l = compute_lambda(data, r_list)
+'''
+Generate neighbour from sol changing values from to_change
+'''
+
+
+def generate_neighbour_local_search(sol, to_change):
+    neighbour = np.copy(sol)
+    neighbour[to_change[0]]=to_change[1]
+    return neighbour
+
+
+def generate_virtual_neighbourhood (n, k, sol):
+    neighbourhood = [[i, c] for c in range(k) for i in range(n) if sol[i] != c]
+    random.shuffle(neighbourhood)
+    return np.array(neighbourhood)
+
+
+
+'''
+Local search
+'''
+
+
+def local_search(data, r_list, k, sol, max_evaluations):
+    print("Búsqueda local")
+    # n será la longitud de los datos
+    n = len(data)
+    l = compute_lambda(data, r_list)
+    evaluations = 0
+    i = 0
+    neighbourhood = generate_virtual_neighbourhood(n, k, sol)
+    objective_sol = objective(sol, data, k, r_list, l)
+    while evaluations<max_evaluations and i<len(neighbourhood):
+        neighbour = generate_neighbour_local_search(sol, neighbourhood[i])
+        i += 1
+        # If it is a feasible neighbour
+        if len(np.unique(neighbour)) == k:
+            objective_neighbour = objective(neighbour, data, k, r_list, l)
+            evaluations += 1
+            # first neighbour that improves actual solution
+            if objective_neighbour < objective_sol:
+                sol = copy.deepcopy(neighbour)
+                objective_sol = copy.deepcopy(objective_neighbour)
+                # print("OBJ", objective_sol)
+                neighbourhood = generate_virtual_neighbourhood(n, k, sol)
+                i = 0
+    return sol
+
 
 
 # Inicializar to do
-def fa_v1(data, r_list, k, l, n_fireflies):
+def fa_v1(data, r_list, k, l, n_fireflies, file=None):
     max_evaluations = 100000
     gamma = 1
     beta = 1
+    temperature = 0.8
     data_normalized = normalize(data)
     fireflies = np.array(initial_fireflies(n_fireflies, data, data_normalized, k))
     evaluations = n_fireflies
     comb = list(combinations(range(n_fireflies), 2))
     fallos = 0
     best = 10000000000
-    while evaluations < max_evaluations and fallos < n_fireflies:
+    generations = 0
+    max_eval_local = 100
+    while evaluations < max_evaluations and fallos < n_fireflies * 10:
         random.shuffle(comb)
         for i in comb:
            if fireflies[i[0]][2] < fireflies[i[1]][2]:
                 # mover luciérnaga i hacia j
                 # Variar atracción con la distancia via exp(-gamma r)
                 # Evaluar las nuevas soluciones y actualizar la intensidad de la luz
-                fireflies[i[1]] = movement(fireflies[i[1]], fireflies[i[0]], beta, gamma, data, data_normalized, k, r_list, l)
+                fireflies[i[1]] = movement(fireflies[i[1]], fireflies[i[0]], beta, gamma, data, data_normalized, k, r_list, l ,temperature)
                 evaluations = evaluations + 1
+        # Memético
+        # generations = generations + 1
+        # if generations > 10:
+        #     # Búsqueda local
+        #     # subset = np.argpartition(population[:, 1], int(perc * chromosomes))[:int(perc * chromosomes)]
+        #     # population[subset], new_evaluations = map(list, zip(
+        #     #     *[soft_local_search(sol, data, k, r_list, l) for sol in population[subset]]))
+        #     improved_sols = [local_search(data, r_list, k, f, max_eval_local) for f in fireflies[:,1]]
+        #     fireflies = np.array([generate_firefly_from_solution(i, data, data_normalized, k, r_list, l) for i in improved_sols])
+        #     evaluations = evaluations + n_fireflies * max_eval_local
+        #     generations = 0
         if best > fireflies[np.argmin(fireflies[:, 2])][2]:
             best = fireflies[np.argmin(fireflies[:, 2])][2]
             fallos = 0
         else:
             fallos = fallos + 1
-        print(str(best)+', ' + str(np.mean(fireflies[:, 2])) + ', ' + str(evaluations))
+        # Cooling scheme
+        # temperature = temperature * 0.997
+        print(str(best)+', ' + str(np.mean(fireflies[:, 2])) + ', ' + str(evaluations) +  ', ' + str(temperature))
+        file.write(str(best)+', ' + str(np.mean(fireflies[:, 2])) + ', ' + str(evaluations) +  ', ' + str(temperature) + str('\n'))
     # Ordenar las luciérnagas y buscar la más luminosa
     print('          FIIN          ')
     print(best)
-    return best
+    return fireflies[np.argmin(fireflies[:, 2])]
 
 
-f = fa_v1(data, r_list, k, l, n_fireflies)
+dataset = "ecoli"
+k = 8
+
+data = read_file("bin/" + dataset + "_set.dat")
+r = "10"
+r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+r_list = build_restrictions_list(r_matrix)
+n_fireflies = 50
+l = compute_lambda(data, r_list)
+#
+d = 0
+f = open("fa_sin_temp_" + dataset + '_' + str(d) + ".txt", "w")
+data = read_file("bin/" + dataset + "_set.dat")
+f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
+f.write("SEED: " + str(d*10))
+r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+r_list = build_restrictions_list(r_matrix)
+f.write("\n\n--------> Restriction: " + r + "\n")
+print("Restriction: ", r)
+start_time = time.time()
+sol = fa_v1(data, r_list, k, l, n_fireflies, f)
+time_sol = time.time() - start_time
+print(str(time_sol))
+f.write("TIME: " + str(time_sol) + "\n\n")
 
 # datasets = ["iris", "ecoli", "rand", "newthyroid"]
 # clusters = [3, 8, 3, 3]
 # restrictions = ["10", "20"]
-#
+
 # def run_in_parallel(d):
 #     dataset = datasets[d]
 #     k = clusters[d]
 #     r = '10'
-#     random.seed(d*10)
+#     random.seed((d+1)*10)
 #     # Results file
-#     f = open("fa_random05_" + dataset + '_' + str(d) + ".txt", "w")
+#     f = open("fa_random_10_097_" + dataset + '_' + str(d) + ".txt", "w")
 #     data = read_file("bin/" + dataset + "_set.dat")
 #     f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
 #     f.write("SEED: " + str(d*10))
@@ -234,7 +344,7 @@ f = fa_v1(data, r_list, k, l, n_fireflies)
 #     print("Restriction: ", r)
 #     l = compute_lambda(data, r_list)
 #     start_time = time.time()
-#     sol = fa_v1(data, r_list, k, l, n_fireflies)
+#     sol = fa_v1(data, r_list, k, l, n_fireflies, f)
 #     time_sol = time.time() - start_time
 #     print(str(time_sol))
 #     f.write("TIME: " + str(time_sol) + "\n\n")
@@ -247,8 +357,8 @@ f = fa_v1(data, r_list, k, l, n_fireflies)
 #     print("C_RATE: " + str(c_rate) + "\n")
 #     print("INF_RATE: " + str(inf_rate) + "\n")
 #     f.write("INF_RATE: " + str(inf_rate) + "\n")
-#
-#
+
+
 # from multiprocessing import Pool
 #
 # argument = [0,1,2,3]
@@ -259,4 +369,15 @@ f = fa_v1(data, r_list, k, l, n_fireflies)
 #     pool.map(run_in_parallel, argument)
 #     pool.close()
 #     pool.join()
+# #
+
+def initial_solution(k, n):
+    # Se genera un array de tamaño n con números entre 0 y k,
+    # donde k es el número de clústers
+    initial_sol = np.random.randint(0, k, size=n)
+    # Si la solución no es factible llamamos de nuevo a la función
+    if len(np.unique(initial_sol)) != k:
+        initial_solution(k, n)
+    else:
+        return initial_sol
 
