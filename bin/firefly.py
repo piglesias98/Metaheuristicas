@@ -113,7 +113,7 @@ Compute initial solution
 '''
 
 
-def compute_initial_solution(data, data_normalized, k):
+def compute_initial_solution(data, data_normalized, k, r_list, l):
     # Calculamos los centroides
     centroids = compute_initial_centroids(data_normalized, k)
     # Calculamos la solución en base a los centroides
@@ -143,8 +143,8 @@ def compute_centroid_from_solution(data, sol, k):
 
 
 
-def initial_fireflies(n_fireflies, data, data_normalized, k):
-    return [compute_initial_solution(data, data_normalized, k) for i in range(n_fireflies)]
+def initial_fireflies(n_fireflies, data, data_normalized, k, r_list, l):
+    return [compute_initial_solution(data, data_normalized, k, r_list, l) for i in range(n_fireflies)]
 
 
 def movement(move_from, move_to, beta, gamma, data, data_normalized, k, r_list, l, temperature):
@@ -261,7 +261,7 @@ def generate_neighbour(sol, to_change):
 
 
 
-def soft_local_search(data, r_list, k, sol, max_evaluations=None):
+def soft_local_search(data, r_list, k, sol, l):
     n = len(sol)
     # Xi será el número máximo de fallos, un 10% del tamaño del cromosoma
     xi = int(0.1*n)
@@ -297,12 +297,16 @@ def soft_local_search(data, r_list, k, sol, max_evaluations=None):
 
 # Inicializar to do
 def fa_v1(data, r_list, k, l, n_fireflies, file=None):
+    # Memético
+    pick_best = True
+    perc = 0.1
+    # Parámetros iniciales
     max_evaluations = 100000
     gamma = 1
     beta = 1
     temperature = 0.8
     data_normalized = normalize(data)
-    fireflies = np.array(initial_fireflies(n_fireflies, data, data_normalized, k))
+    fireflies = np.array(initial_fireflies(n_fireflies, data, data_normalized, k, r_list, l))
     evaluations = n_fireflies
     comb = list(combinations(range(n_fireflies), 2))
     fallos = 0
@@ -321,15 +325,25 @@ def fa_v1(data, r_list, k, l, n_fireflies, file=None):
         # Memético
         generations = generations + 1
         if generations > 10:
+            print('Búsqueda local')
             # Búsqueda local
             # subset = np.argpartition(population[:, 1], int(perc * chromosomes))[:int(perc * chromosomes)]
             # population[subset], new_evaluations = map(list, zip(
             #     *[soft_local_search(sol, data, k, r_list, l) for sol in population[subset]]))
-            improved_sols, new_evaluations = map(list, zip(
-                *[soft_local_search(data, r_list, k, f, max_eval_local) for f in fireflies[:,1]]))
+            improved_sol = fireflies[:,1]
+            if pick_best:
+                subset = np.argpartition(fireflies[:, 2], int(perc * n_fireflies))[:int(perc * n_fireflies)]
+            else:
+                if perc == 1:
+                    subset = np.arange(n_fireflies)
+                else:
+                    subset = random.sample(range(n_fireflies), int(perc * n_fireflies))
+
+            improved_sol[subset], new_evaluations = map(list, zip(
+                *[soft_local_search(data, r_list, k, sol, l) for sol in improved_sol]))
 
             # improved_sols, new_evaluations = [soft_local_search(data, r_list, k, f, max_eval_local) for f in fireflies[:,1]]
-            fireflies = np.array([generate_firefly_from_solution(i, data, data_normalized, k, r_list, l) for i in improved_sols])
+            fireflies = np.array([generate_firefly_from_solution(i, data, data_normalized, k, r_list, l) for i in improved_sol])
             evaluations = evaluations + np.sum(new_evaluations)
             generations = 0
         if best > fireflies[np.argmin(fireflies[:, 2])][2]:
@@ -347,84 +361,85 @@ def fa_v1(data, r_list, k, l, n_fireflies, file=None):
     return fireflies[np.argmin(fireflies[:, 2])]
 
 
-dataset = "rand"
-k = 3
-
-
-data = read_file("bin/" + dataset + "_set.dat")
-r = "10"
-r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
-r_list = build_restrictions_list(r_matrix)
-n_fireflies = 50
-l = compute_lambda(data, r_list)
-#
-d = 0
-f = open("fa_soft_local_search_sin_temp_" + dataset + '_' + str(d) + ".txt", "w")
-data = read_file("bin/" + dataset + "_set.dat")
-f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
-f.write("SEED: " + str(d*10))
-r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
-r_list = build_restrictions_list(r_matrix)
-f.write("\n\n--------> Restriction: " + r + "\n")
-print("Restriction: ", r)
-start_time = time.time()
-sol = fa_v1(data, r_list, k, l, n_fireflies, f)
-time_sol = time.time() - start_time
-print(str(time_sol))
-f.write("TIME: " + str(time_sol) + "\n\n")
-c_rate = c(sol[1], data, k)
-inf_rate = infeasibility_total(sol[1], r_list)
-f.write("C_RATE: " + str(c_rate) + "\n")
-print("C_RATE: " + str(c_rate) + "\n")
-print("INF_RATE: " + str(inf_rate) + "\n")
-f.write("INF_RATE: " + str(inf_rate) + "\n")
-
-# datasets = ["iris", "ecoli", "rand", "newthyroid"]
-# clusters = [3, 8, 3, 3]
-# restrictions = ["10", "20"]
-
-# def run_in_parallel(d):
-#     dataset = datasets[d]
-#     k = clusters[d]
-#     r = '10'
-#     random.seed((d+1)*10)
-#     # Results file
-#     f = open("fa_random_10_097_" + dataset + '_' + str(d) + ".txt", "w")
-#     data = read_file("bin/" + dataset + "_set.dat")
-#     f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
-#     f.write("SEED: " + str(d*10))
-#     r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
-#     r_list = build_restrictions_list(r_matrix)
-#     f.write("\n\n--------> Restriction: " + r + "\n")
-#     print("Restriction: ", r)
-#     l = compute_lambda(data, r_list)
-#     start_time = time.time()
-#     sol = fa_v1(data, r_list, k, l, n_fireflies, f)
-#     time_sol = time.time() - start_time
-#     print(str(time_sol))
-#     f.write("TIME: " + str(time_sol) + "\n\n")
-#     obj_rate = objective(sol[1], data, k, r_list, compute_lambda(data, r_list))
-#     print("OBJ_RATE: " + str(obj_rate) + "\n")
-#     f.write("OBJ_RATE: " + str(obj_rate) + "\n")
-#     c_rate = c(sol[1], data, k)
-#     inf_rate = infeasibility_total(sol[1], r_list)
-#     f.write("C_RATE: " + str(c_rate) + "\n")
-#     print("C_RATE: " + str(c_rate) + "\n")
-#     print("INF_RATE: " + str(inf_rate) + "\n")
-#     f.write("INF_RATE: " + str(inf_rate) + "\n")
-
-
-# from multiprocessing import Pool
-#
-# argument = [0,1,2,3]
+# dataset = "newthyroid"
+# k = 3
 #
 #
-# if __name__ == '__main__':
-#     pool = Pool()
-#     pool.map(run_in_parallel, argument)
-#     pool.close()
-#     pool.join()
+# data = read_file("bin/" + dataset + "_set.dat")
+# r = "10"
+# r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+# r_list = build_restrictions_list(r_matrix)
+# n_fireflies = 50
+# l = compute_lambda(data, r_list)
 # #
+# d = 0
+# f = open("fa_soft_local_search_sin_temp_" + dataset + '_' + str(d) + ".txt", "w")
+# data = read_file("bin/" + dataset + "_set.dat")
+# f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
+# f.write("SEED: " + str(d*10))
+# r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+# r_list = build_restrictions_list(r_matrix)
+# f.write("\n\n--------> Restriction: " + r + "\n")
+# print("Restriction: ", r)
+# start_time = time.time()
+# sol = fa_v1(data, r_list, k, l, n_fireflies, f)
+# time_sol = time.time() - start_time
+# print(str(time_sol))
+# f.write("TIME: " + str(time_sol) + "\n\n")
+# c_rate = c(sol[1], data, k)
+# inf_rate = infeasibility_total(sol[1], r_list)
+# f.write("C_RATE: " + str(c_rate) + "\n")
+# print("C_RATE: " + str(c_rate) + "\n")
+# print("INF_RATE: " + str(inf_rate) + "\n")
+# f.write("INF_RATE: " + str(inf_rate) + "\n")
+
+datasets = ["iris", "ecoli", "rand", "newthyroid"]
+clusters = [3, 8, 3, 3]
+restrictions = ["10", "20"]
+n_fireflies = 50
+
+def run_in_parallel(d):
+    dataset = datasets[d]
+    k = clusters[d]
+    r = '10'
+    random.seed((d+1)*10)
+    # Results file
+    f = open("fa_soft_local_search_sin_temp_pick_best_" + dataset + '_' + str(d) + ".txt", "w")
+    data = read_file("bin/" + dataset + "_set.dat")
+    f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
+    f.write("SEED: " + str(d*10))
+    r_matrix = read_file("bin/" + dataset + "_set_const_" + r + ".const")
+    r_list = build_restrictions_list(r_matrix)
+    f.write("\n\n--------> Restriction: " + r + "\n")
+    print("Restriction: ", r)
+    l = compute_lambda(data, r_list)
+    start_time = time.time()
+    sol = fa_v1(data, r_list, k, l, n_fireflies, f)
+    time_sol = time.time() - start_time
+    print(str(time_sol))
+    f.write("TIME: " + str(time_sol) + "\n\n")
+    obj_rate = objective(sol[1], data, k, r_list, compute_lambda(data, r_list))
+    print("OBJ_RATE: " + str(obj_rate) + "\n")
+    f.write("OBJ_RATE: " + str(obj_rate) + "\n")
+    c_rate = c(sol[1], data, k)
+    inf_rate = infeasibility_total(sol[1], r_list)
+    f.write("C_RATE: " + str(c_rate) + "\n")
+    print("C_RATE: " + str(c_rate) + "\n")
+    print("INF_RATE: " + str(inf_rate) + "\n")
+    f.write("INF_RATE: " + str(inf_rate) + "\n")
+
+
+from multiprocessing import Pool
+
+argument = [0,1,2,3]
+
+
+if __name__ == '__main__':
+    pool = Pool()
+    pool.map(run_in_parallel, argument)
+    pool.close()
+    pool.join()
+#
 
 def initial_solution(k, n):
     # Se genera un array de tamaño n con números entre 0 y k,
