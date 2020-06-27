@@ -165,7 +165,7 @@ def movement(move_from, move_to, beta, gamma, data, data_normalized, k, r_list, 
     return move_from
 
 
-def iefa_movement(move_from, move_to, beta, gamma, data, data_normalized, k, r_list, l, temperature)
+def iefa_movement(move_from, move_to, beta, gamma, data, data_normalized, k, r_list, l, temperature):
     centroid_from = copy.deepcopy(np.array(move_from[0]))
     centroid_to = copy.deepcopy(np.array(move_to[0]))
     for c in range(k):
@@ -249,6 +249,51 @@ def local_search(data, r_list, k, sol, max_evaluations):
     return sol
 
 
+'''
+Generate neighbour from sol changing values from to_change
+'''
+
+
+def generate_neighbour(sol, to_change):
+    neighbour = np.copy(sol)
+    neighbour[to_change[0]]=to_change[1]
+    return neighbour
+
+
+
+def soft_local_search(data, r_list, k, sol, max_evaluations=None):
+    n = len(sol)
+    # Xi será el número máximo de fallos, un 10% del tamaño del cromosoma
+    xi = int(0.1*n)
+    # Recorreremos los elementos de forma aleatoria
+    rsi = random.sample(range(n), n)
+    errors = 0
+    improvement = True
+    i = 0
+    evaluations = 0
+    # Mientras que haya mejora
+    # No se alcance el número máximo de errores
+    # Se recorre como máximo una vez el cromosoma
+    while (improvement or errors < xi) and (i < n):
+        old_sol = copy.deepcopy(sol)
+        improvement = False
+        # Asignamos el mejor valor posible a sol[i]
+        # Tiene que tratarse de una solución factible
+        obj = np.array([[objective(generate_neighbour(sol, [rsi[i], ci]), data, k, r_list, l), ci]  for ci in range(k) if len(np.unique(generate_neighbour(sol, [rsi[i], ci]))) == k])
+        best = np.argmin(obj[:,0])
+        evaluations = evaluations + len(obj)
+        # Asignar al elemento el mejor cluster
+        sol[rsi[i]] = obj[best][1]
+        if np.array_equal(old_sol, sol):
+            errors = errors + 1
+        else:
+            improvement = True
+        i = i + 1
+    # Return sol and evaluations
+    return sol, evaluations
+
+
+
 
 # Inicializar to do
 def fa_v1(data, r_list, k, l, n_fireflies, file=None):
@@ -271,19 +316,22 @@ def fa_v1(data, r_list, k, l, n_fireflies, file=None):
                 # mover luciérnaga i hacia j
                 # Variar atracción con la distancia via exp(-gamma r)
                 # Evaluar las nuevas soluciones y actualizar la intensidad de la luz
-                fireflies[i[1]] = movement(fireflies[i[1]], fireflies[i[0]], beta, gamma, data, data_normalized, k, r_list, l ,temperature)
+                fireflies[i[1]] = iefa_movement(fireflies[i[1]], fireflies[i[0]], beta, gamma, data, data_normalized, k, r_list, l ,temperature)
                 evaluations = evaluations + 1
         # Memético
-        # generations = generations + 1
-        # if generations > 10:
-        #     # Búsqueda local
-        #     # subset = np.argpartition(population[:, 1], int(perc * chromosomes))[:int(perc * chromosomes)]
-        #     # population[subset], new_evaluations = map(list, zip(
-        #     #     *[soft_local_search(sol, data, k, r_list, l) for sol in population[subset]]))
-        #     improved_sols = [local_search(data, r_list, k, f, max_eval_local) for f in fireflies[:,1]]
-        #     fireflies = np.array([generate_firefly_from_solution(i, data, data_normalized, k, r_list, l) for i in improved_sols])
-        #     evaluations = evaluations + n_fireflies * max_eval_local
-        #     generations = 0
+        generations = generations + 1
+        if generations > 10:
+            # Búsqueda local
+            # subset = np.argpartition(population[:, 1], int(perc * chromosomes))[:int(perc * chromosomes)]
+            # population[subset], new_evaluations = map(list, zip(
+            #     *[soft_local_search(sol, data, k, r_list, l) for sol in population[subset]]))
+            improved_sols, new_evaluations = map(list, zip(
+                *[soft_local_search(data, r_list, k, f, max_eval_local) for f in fireflies[:,1]]))
+
+            # improved_sols, new_evaluations = [soft_local_search(data, r_list, k, f, max_eval_local) for f in fireflies[:,1]]
+            fireflies = np.array([generate_firefly_from_solution(i, data, data_normalized, k, r_list, l) for i in improved_sols])
+            evaluations = evaluations + np.sum(new_evaluations)
+            generations = 0
         if best > fireflies[np.argmin(fireflies[:, 2])][2]:
             best = fireflies[np.argmin(fireflies[:, 2])][2]
             fallos = 0
@@ -299,8 +347,9 @@ def fa_v1(data, r_list, k, l, n_fireflies, file=None):
     return fireflies[np.argmin(fireflies[:, 2])]
 
 
-dataset = "ecoli"
-k = 8
+dataset = "rand"
+k = 3
+
 
 data = read_file("bin/" + dataset + "_set.dat")
 r = "10"
@@ -310,7 +359,7 @@ n_fireflies = 50
 l = compute_lambda(data, r_list)
 #
 d = 0
-f = open("fa_sin_temp_" + dataset + '_' + str(d) + ".txt", "w")
+f = open("fa_soft_local_search_sin_temp_" + dataset + '_' + str(d) + ".txt", "w")
 data = read_file("bin/" + dataset + "_set.dat")
 f.write("\n\n------------------------------------  " + dataset + "  ------------------------------------\n")
 f.write("SEED: " + str(d*10))
@@ -323,6 +372,12 @@ sol = fa_v1(data, r_list, k, l, n_fireflies, f)
 time_sol = time.time() - start_time
 print(str(time_sol))
 f.write("TIME: " + str(time_sol) + "\n\n")
+c_rate = c(sol[1], data, k)
+inf_rate = infeasibility_total(sol[1], r_list)
+f.write("C_RATE: " + str(c_rate) + "\n")
+print("C_RATE: " + str(c_rate) + "\n")
+print("INF_RATE: " + str(inf_rate) + "\n")
+f.write("INF_RATE: " + str(inf_rate) + "\n")
 
 # datasets = ["iris", "ecoli", "rand", "newthyroid"]
 # clusters = [3, 8, 3, 3]
